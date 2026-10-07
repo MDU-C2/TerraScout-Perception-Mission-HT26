@@ -25,3 +25,21 @@ def test_every_target_renders_and_its_manifests_load(name, tmp_path, monkeypatch
         assert manifest.router.tcp_port == Instance(1).unit_router_tcp_port(
             summary["units"].index(unit)
         )
+
+def test_simulation_mounts_host_gpu_without_nvidia_runtime(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        model, "SITE_FILE", model.SOURCE_ROOT / "fleet_config" / "site.example.yaml"
+    )
+    out = tmp_path / "sim"
+    render_target("sim", Instance(1), out)
+
+    compose = yaml.safe_load((out / "compose.yaml").read_text())
+    world = compose["services"]["world"]
+
+    assert world["devices"] == ["/dev/dri:/dev/dri"]
+    assert len(world["group_add"]) == 2
+    assert "runtime" not in world
+    assert "deploy" not in world
+    assert not any(
+        name.startswith(("NVIDIA_", "__NV")) for name in world["environment"]
+    )

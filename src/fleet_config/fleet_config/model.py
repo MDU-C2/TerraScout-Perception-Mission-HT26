@@ -120,7 +120,7 @@ class Simulation:
     world: World
     datum: Datum
     seed: int
-    gpu: bool
+    gpu: str
 
 
 @dataclass(frozen=True)
@@ -215,7 +215,7 @@ class SimTarget:
     datum: Datum
     groups: Mapping[str, RobotGroup]
     seed: int
-    gpu: bool = False
+    gpu: str = "nvidia"
     features: Features = Features()
 
     def fleet(self, name: str) -> Fleet:

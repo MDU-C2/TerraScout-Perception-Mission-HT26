@@ -22,7 +22,7 @@ SIM = SimTarget(
     world=FOREST,
     datum=Datum(lat=47.397742, lon=8.545594, elevation=488.0),
     seed=1,
-    gpu=True,
+    gpu="nvidia",
     groups={
         "scouts": RobotGroup(TERRASCOUT, count=1, spawn_poses=((0.0, 0.0, 0.0, 0.0, 0.0, 0.0),)),
         "aeros": RobotGroup(AEROSCOUT, count=1, spawn_poses=((5.0, 2.0, 0.0, 0.0, 0.0, 0.0),)),
