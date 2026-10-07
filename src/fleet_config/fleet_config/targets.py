@@ -25,7 +25,7 @@ SIM = SimTarget(
     gpu="nvidia",
     groups={
         "scouts": RobotGroup(TERRASCOUT, count=1, spawn_poses=((0.0, 0.0, 0.0, 0.0, 0.0, 0.0),)),
-        "aeros": RobotGroup(AEROSCOUT, count=1, spawn_poses=((5.0, 2.0, 0.0, 0.0, 0.0, 0.0),)),
+        # "aeros": RobotGroup(AEROSCOUT, count=1, spawn_poses=((5.0, 2.0, 0.0, 0.0, 0.0, 0.0),)),
     },
 )
 
