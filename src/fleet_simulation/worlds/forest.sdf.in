@@ -243,6 +243,12 @@
       <include><name>oak_o17</name><uri>model://oak_tree</uri><pose>15.0 -11.5 0 0 0 1.2</pose></include>
       <include><name>oak_o18</name><uri>model://oak_tree</uri><pose>18.0 -5.5 0 0 0 3.6</pose></include>
 
+      <!-- Stop Signs for 2D Perception & Object Detection -->
+      <include><name>stop_sign_1</name><uri>model://stop_sign</uri><pose>3.5 0.0 0 0 0 3.14159</pose></include>
+      <include><name>stop_sign_2</name><uri>model://stop_sign</uri><pose>6.5 2.0 0 0 0 2.8</pose></include>
+      <include><name>stop_sign_3</name><uri>model://stop_sign</uri><pose>8.0 -2.5 0 0 0 3.5</pose></include>
+      <include><name>stop_sign_4</name><uri>model://stop_sign</uri><pose>12.0 1.0 0 0 0 3.14159</pose></include>
+
     </model>
 
   </world>

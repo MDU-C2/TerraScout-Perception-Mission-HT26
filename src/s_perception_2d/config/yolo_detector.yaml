@@ -1,0 +1,33 @@
+# Configuration parameters for SAGE s_perception_2d YOLO detector
+
+/**:
+  ros__parameters:
+    # Model configuration
+    model_path: ""                       # Empty string auto-discovers package share models/best.pt
+    device: "auto"                        # "auto" (uses CUDA if available, CPU otherwise), "cuda:0", or "cpu"
+    inference_imgsz: 640
+
+    # Detection thresholds & processing rate
+    confidence_threshold: 0.35            # Minimum detection confidence
+    iou_threshold: 0.45                   # NMS IoU threshold
+    target_fps: 5.0                       # Maximum inference rate (Hz) to prevent CPU starvation and queue lag
+
+    # Topics (relative to node namespace so it automatically binds to the robot oakd topics)
+    input_image_topic: "oakd/rgb/image_raw"
+    output_detections_topic: "oakd/detections_2d"
+    publish_annotated_image: true
+    annotated_image_topic: "oakd/detections_image"
+    qos_reliability: "best_effort"        # "best_effort" (compatible with Gazebo camera) or "reliable"
+
+    # Perception record validation & class handling
+    # Supported configured classes from trained YOLO model:
+    configured_classes:
+      - "pedestrian_sign"
+      - "roadwork_sign"
+      - "stop-sign"
+      - "traffic-cone"
+    allow_unknown_records: true           # If true, unassigned/unsupported classes become 'unknown'
+
+    # Logging
+    enable_file_logging: true
+    log_dir: "/run/sage/log/perception"

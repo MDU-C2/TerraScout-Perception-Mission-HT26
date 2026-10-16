@@ -25,13 +25,19 @@ SIM = SimTarget(
     gpu="nvidia",
     groups={
         "scouts": RobotGroup(TERRASCOUT, count=1, spawn_poses=((0.0, 0.0, 0.0, 0.0, 0.0, 0.0),)),
-        # "aeros": RobotGroup(AEROSCOUT, count=1, spawn_poses=((5.0, 2.0, 0.0, 0.0, 0.0, 0.0),)),
+        "aeros": RobotGroup(AEROSCOUT, count=1, spawn_poses=((5.0, 2.0, 0.0, 0.0, 0.0, 0.0),)),
     },
 )
 
 TARGETS: dict[str, Target] = {
     "terrascout1": PhysicalTarget(robot_class=TERRASCOUT, id="terrascout1"),
     "sim": SIM,
+    "sim-scout": replace(
+        SIM,
+        groups={
+            "scouts": RobotGroup(TERRASCOUT, count=1, spawn_poses=((0.0, 0.0, 0.0, 0.0, 0.0, 0.0),)),
+        },
+    ),
     "sim-madum": replace(SIM, features=Features(recording_enabled=True, madum_enabled=True)),
     "station": StationTarget(robots=(("terrascout1", TERRASCOUT),)),
 }

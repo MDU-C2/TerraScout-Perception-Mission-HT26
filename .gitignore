@@ -19,6 +19,10 @@ recordings/
 .sage/render/
 .sage/run/
 runs/
+runs_yolo/
+*.pt
+!src/s_perception_2d/models/best.pt
 .venv/
 .ruff_cache/
 /site.yaml
+

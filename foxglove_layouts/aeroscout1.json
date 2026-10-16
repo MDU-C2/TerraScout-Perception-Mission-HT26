@@ -1,0 +1,207 @@
+{
+  "configById": {
+    "3D!main": {
+      "topics": {
+        "/aeroscout1/odom": {
+          "visible": true,
+          "type": "line",
+          "lineWidth": 0.15,
+          "gradient": [
+            "#00d4ff",
+            "#00ffffff"
+          ]
+        },
+        "/aeroscout1/mission_path": {
+          "visible": true,
+          "type": "line",
+          "lineWidth": 0.2,
+          "gradient": [
+            "#22c55e",
+            "#22c55eff"
+          ]
+        },
+        "/aeroscout1/fmu/in/trajectory_setpoint": {
+          "visible": false
+        }
+      },
+      "layers": {
+        "grid": {
+          "layerId": "foxglove.Grid",
+          "instanceId": "grid",
+          "size": 100,
+          "divisions": 50,
+          "lineWidth": 0.5,
+          "color": "#248eff80",
+          "drawBehind": true
+        }
+      },
+      "followMode": "follow-position",
+      "followTf": "base_link",
+      "renderFrameId": "odom",
+      "cameraState": {
+        "perspective": true,
+        "distance": 30,
+        "phi": 50,
+        "thetaOffset": 45,
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "scene": {
+        "transforms": {
+          "showLabel": true,
+          "labelSize": 0.2
+        }
+      },
+      "transforms": {
+        "frame:base_link": {
+          "visible": true
+        },
+        "frame:odom": {
+          "visible": true
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/aeroscout1/goal_pose",
+        "pointTopic": "/aeroscout1/clicked_point",
+        "poseEstimateTopic": "/aeroscout1/initialpose"
+      },
+      "synchronize": false,
+      "imageMode": {}
+    },
+    "map!geo": {
+      "topics": {
+        "/aeroscout1/navsat": {
+          "visible": true
+        },
+        "/aeroscout1/waypoints_geo": {
+          "visible": true
+        }
+      },
+      "zoomLevel": 17
+    },
+    "RawMessages!status": {
+      "topicPath": "/aeroscout1/fmu/out/vehicle_status",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "fontSize": 12
+    },
+    "RawMessages!progress": {
+      "topicPath": "/aeroscout1/mission_progress",
+      "fontSize": 12
+    },
+    "Plot!altitude": {
+      "paths": [
+        {
+          "value": "/aeroscout1/odom.pose.pose.position.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "altitude (m)"
+        },
+        {
+          "value": "/aeroscout1/fmu/out/vehicle_local_position.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "PX4 local z (NED, m)"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    },
+    "Plot!battery": {
+      "paths": [
+        {
+          "value": "/aeroscout1/fmu/out/battery_status.voltage_v",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "voltage (V)"
+        },
+        {
+          "value": "/aeroscout1/fmu/out/battery_status.remaining",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "remaining (0-1)"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    },
+    "Tab!plots": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Altitude",
+          "layout": "Plot!altitude"
+        },
+        {
+          "title": "Battery",
+          "layout": "Plot!battery"
+        }
+      ]
+    },
+    "Tab!status": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Vehicle status",
+          "layout": "RawMessages!status"
+        },
+        {
+          "title": "Mission progress",
+          "layout": "RawMessages!progress"
+        }
+      ]
+    }
+  },
+  "layout": {
+    "direction": "column",
+    "first": {
+      "direction": "row",
+      "first": "3D!main",
+      "second": {
+        "direction": "column",
+        "first": "map!geo",
+        "second": "Tab!status",
+        "splitPercentage": 55
+      },
+      "splitPercentage": 55
+    },
+    "second": "Tab!plots",
+    "splitPercentage": 70
+  },
+  "globalVariables": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "userNodes": {}
+}

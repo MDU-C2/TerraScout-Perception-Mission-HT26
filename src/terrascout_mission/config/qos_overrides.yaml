@@ -49,3 +49,18 @@
 /<robot_namespace>/front_camera/image:
   depth: 10
   reliability: best_effort
+/<robot_namespace>/oakd/rgb/image_raw:
+  depth: 10
+  reliability: best_effort
+/<robot_namespace>/oakd/depth/image_raw:
+  depth: 10
+  reliability: best_effort
+/<robot_namespace>/oakd/rgb/camera_info:
+  depth: 10
+  reliability: best_effort
+/<robot_namespace>/oakd/depth/camera_info:
+  depth: 10
+  reliability: best_effort
+/<robot_namespace>/oakd/points:
+  depth: 10
+  reliability: best_effort

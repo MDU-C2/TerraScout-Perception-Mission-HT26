@@ -47,7 +47,10 @@
       "synchronize": false
     },
     "Image!288tvig": {
-      "imageMode": {},
+      "imageMode": {
+        "imageTopic": "/<robot_namespace>/oakd/rgb/image_raw",
+        "calibrationTopic": "/<robot_namespace>/oakd/rgb/camera_info"
+      },
       "cameraState": {
         "distance": 20,
         "perspective": true,
@@ -284,6 +287,12 @@
           "visible": true
         },
         "frame:fp_cam_link": {
+          "visible": false
+        },
+        "frame:oakd_link": {
+          "visible": false
+        },
+        "frame:oakd_rgb_optical_frame": {
           "visible": false
         }
       },

@@ -70,6 +70,12 @@ RUN staging=/tmp/zenoh; \
 
 COPY docker/pip-constraints.txt /etc/pip-constraints.txt
 RUN pip install --break-system-packages --no-cache-dir -c /etc/pip-constraints.txt pyproj==3.8.0 pydantic==2.13.5
+RUN pip install --break-system-packages --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    "numpy<2.0.0" \
+    "torch>=2.0.0" \
+    "torchvision" \
+    "ultralytics>=8.0.0"
 
 COPY docker/ros-workspace-exec /usr/local/bin/ros-workspace-exec
 RUN chmod 0755 /usr/local/bin/ros-workspace-exec
@@ -101,7 +107,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && apt-get install -y --no-install-recommends \
     "ros-${ROS_DISTRO}-joy" \
-    "ros-${ROS_DISTRO}-teleop-twist-joy" && \
+    "ros-${ROS_DISTRO}-teleop-twist-joy" \
+    "ros-${ROS_DISTRO}-teleop-twist-keyboard" && \
     rm -rf /var/lib/apt/lists/*
 
 FROM base AS simulation

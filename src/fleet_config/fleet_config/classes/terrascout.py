@@ -60,6 +60,10 @@ NAVIGATION_PACKAGE = "terrascout_navigation"
 HARDWARE_PACKAGE = "terrascout_hardware"
 MISSION_PACKAGE = "terrascout_mission"
 SIMULATION_PACKAGE = "fleet_simulation"
+PERCEPTION_PACKAGE = "s_perception_2d"
+
+YOLO_DETECTOR = "yolo_detector"
+YOLO_PARAMS = params_path("yolo_detector.yaml")
 
 URDF_MODEL = "urdf/scout.urdf.xacro"
 GEOMETRY = SourceFile(DESCRIPTION_PACKAGE, "config/geometry.yaml")
@@ -76,6 +80,8 @@ FRAME_BASE = "base_link"
 FRAME_GLOBAL = "map"
 FRAME_LIDAR = "lidar_link"
 FRAME_CAMERA = "fp_cam_link"
+FRAME_OAKD = "oakd_link"
+FRAME_OAKD_OPTICAL = "oakd_rgb_optical_frame"
 
 POSITION_TOPIC = "fixposition/odometry_llh"
 DATUM_TOPIC = "fixposition/datum"
@@ -204,6 +210,8 @@ RECORDED_TOPICS = (
     "microstrain/imu/mag",
     "navsat",
     "obstacle_points",
+    "oakd/detections_2d",
+    "oakd/detections_image",
     "odom",
     "plan",
     "platform/safety_stop",
@@ -215,7 +223,17 @@ RECORDED_TOPICS = (
     "trajectories",
     "waypoints_geo",
 )
-RECORDED_TOPICS_SIMULATION = ("/clock", "front_camera/camera_info", "front_camera/image", "odom_gt")
+RECORDED_TOPICS_SIMULATION = (
+    "/clock",
+    "front_camera/camera_info",
+    "front_camera/image",
+    "oakd/rgb/image_raw",
+    "oakd/rgb/camera_info",
+    "oakd/depth/image_raw",
+    "oakd/depth/camera_info",
+    "oakd/points",
+    "odom_gt",
+)
 
 JOYSTICK_DEVICE = "/dev/input/js0"
 JOYSTICK_DEADZONE = 0.05
@@ -673,6 +691,21 @@ def mission_server(unit: UnitContext, after: list[str]) -> Process:
     )
 
 
+def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
+    return [
+        node(
+            YOLO_DETECTOR,
+            package=PERCEPTION_PACKAGE,
+            executable="detector_node.py",
+            node_name=YOLO_DETECTOR,
+            namespace=unit.namespace,
+            params=(YOLO_PARAMS,),
+            after=after,
+            ready=NodeProbe(f"/{unit.namespace}/{YOLO_DETECTOR}"),
+        )
+    ]
+
+
 def processes(unit: UnitContext) -> list[Process]:
     simulated = unit.mode == SIMULATION
     stage_after = [ROBOT_SPAWN, CLOCK_BRIDGE] if simulated else [CLOCK_SYNC]
@@ -697,6 +730,8 @@ def processes(unit: UnitContext) -> list[Process]:
     entries += teleop_processes(unit, stage_after)
     entries += foxglove_processes(unit, stage_after)
     entries += nav2_processes(unit, navigation_after)
+    perception_after = ["gz_bridge"] if simulated else stage_after
+    entries += perception_processes(unit, perception_after)
     entries += [mission_server(unit, [NAV2]), unit_agent(unit)]
     entries += madum_processes(unit)
     entries += recorder_process(unit, recorded_topics(unit))
@@ -715,6 +750,7 @@ def unit_files(unit: UnitContext) -> dict[str, SourceFile]:
         "ground_seg.yaml": GROUND_SEG_CONFIG,
         "twist_mux.yaml": SourceFile(NAVIGATION_PACKAGE, "config/twist_mux.yaml"),
         "joy.yaml": SourceFile(HARDWARE_PACKAGE, "config/joy.yaml"),
+        "yolo_detector.yaml": SourceFile(PERCEPTION_PACKAGE, "config/yolo_detector.yaml"),
     }
     if unit.mode == SIMULATION:
         files["battery.yaml"] = SourceFile(SIMULATION_PACKAGE, "config/battery.yaml")

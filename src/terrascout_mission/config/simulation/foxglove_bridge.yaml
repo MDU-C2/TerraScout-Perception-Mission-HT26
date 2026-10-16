@@ -41,6 +41,15 @@
     - ^/<robot_namespace>/microstrain/imu/data$
     - ^/<robot_namespace>/microstrain/imu/mag$
     - ^/<robot_namespace>/navsat$
+    - ^/<robot_namespace>/oakd/depth/camera_info$
+    - ^/<robot_namespace>/oakd/depth/image_raw$
+    - ^/<robot_namespace>/oakd/points$
+    - ^/<robot_namespace>/oakd/rgb/camera_info$
+    - ^/<robot_namespace>/oakd/rgb/image_raw$
+    - ^/<robot_namespace>/oakd/detections_2d$
+    - ^/<robot_namespace>/oakd/detections_image$
+    - ^/oakd/detections_2d$
+    - ^/oakd/detections_image$
     - ^/<robot_namespace>/obstacle_points$
     - ^/<robot_namespace>/odom$
     - ^/<robot_namespace>/odom_gt$
@@ -66,6 +75,11 @@
     - ^/<robot_namespace>/microstrain/imu/data$
     - ^/<robot_namespace>/microstrain/imu/mag$
     - ^/<robot_namespace>/navsat$
+    - ^/<robot_namespace>/oakd/depth/image_raw$
+    - ^/<robot_namespace>/oakd/points$
+    - ^/<robot_namespace>/oakd/rgb/image_raw$
+    - ^/<robot_namespace>/oakd/detections_image$
+    - ^/oakd/detections_image$
     - ^/<robot_namespace>/obstacle_points$
     - ^/<robot_namespace>/raw_points$
     client_topic_whitelist:

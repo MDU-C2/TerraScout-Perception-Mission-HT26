@@ -1,0 +1,111 @@
+{
+  "configById": {
+    "map!fleet": {
+      "topics": {
+        "/terrascout1/fixposition/odometry_llh": {
+          "visible": true
+        },
+        "/aeroscout1/navsat": {
+          "visible": true
+        }
+      },
+      "zoomLevel": 17
+    },
+    "DiagnosticSummary!station": {
+      "topicToRender": "/station/unit/health",
+      "hardwareIdFilter": "",
+      "pinnedIds": [],
+      "sortByLevel": true
+    },
+    "DiagnosticSummary!terrascout1": {
+      "topicToRender": "/terrascout1/unit/health",
+      "hardwareIdFilter": "",
+      "pinnedIds": [],
+      "sortByLevel": true
+    },
+    "DiagnosticSummary!aeroscout1": {
+      "topicToRender": "/aeroscout1/unit/health",
+      "hardwareIdFilter": "",
+      "pinnedIds": [],
+      "sortByLevel": true
+    },
+    "RawMessages!terrascout1_mission": {
+      "topicPath": "/terrascout1/mission_state",
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "diffEnabled": false,
+      "showFullMessageForDiff": false
+    },
+    "RawMessages!terrascout1": {
+      "topicPath": "/terrascout1/unit/description",
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "diffEnabled": false,
+      "showFullMessageForDiff": false
+    },
+    "RawMessages!aeroscout1_mission": {
+      "topicPath": "/aeroscout1/mission_state",
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "diffEnabled": false,
+      "showFullMessageForDiff": false
+    },
+    "RawMessages!aeroscout1": {
+      "topicPath": "/aeroscout1/unit/description",
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "diffEnabled": false,
+      "showFullMessageForDiff": false
+    },
+    "Tab!station": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Fleet",
+          "layout": {
+            "first": "map!fleet",
+            "second": {
+              "first": "DiagnosticSummary!station",
+              "second": {
+                "first": {
+                  "first": "DiagnosticSummary!terrascout1",
+                  "second": "DiagnosticSummary!aeroscout1",
+                  "direction": "row",
+                  "splitPercentage": 50.0
+                },
+                "second": {
+                  "first": {
+                    "first": "RawMessages!terrascout1_mission",
+                    "second": "RawMessages!aeroscout1_mission",
+                    "direction": "row",
+                    "splitPercentage": 50.0
+                  },
+                  "second": {
+                    "first": "RawMessages!terrascout1",
+                    "second": "RawMessages!aeroscout1",
+                    "direction": "row",
+                    "splitPercentage": 50.0
+                  },
+                  "direction": "column",
+                  "splitPercentage": 50.0
+                },
+                "direction": "column",
+                "splitPercentage": 33.333333333333336
+              },
+              "direction": "column",
+              "splitPercentage": 25.0
+            },
+            "direction": "row",
+            "splitPercentage": 50
+          }
+        }
+      ]
+    }
+  },
+  "layout": "Tab!station",
+  "globalVariables": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "userNodes": {}
+}
