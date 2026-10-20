@@ -34,6 +34,7 @@ class GnssShimNode(Node):
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
         self._odom_sub = self.create_subscription(Odometry, "odom_gt", self._odom_cb, 10)
+
         self._navsat_sub = self.create_subscription(
             NavSatFix, "navsat", self._navsat_cb, qos_profile_sensor_data
         )
@@ -85,16 +86,13 @@ class GnssShimNode(Node):
 
     def _odom_cb(self, msg):
         stamp = msg.header.stamp
-
-        t = TransformStamped()
-        t.header.stamp = stamp
-        t.header.frame_id = FRAME_ODOM
-        t.child_frame_id = FRAME_ROOT
-        t.transform.translation.x = msg.pose.pose.position.x
-        t.transform.translation.y = msg.pose.pose.position.y
-        t.transform.translation.z = msg.pose.pose.position.z
-        t.transform.rotation = msg.pose.pose.orientation
-        self.tf_broadcaster.sendTransform(t)
+        # Using Fast-LIO2, we don't need to publish a transform from odom to base_link, as Fast-LIO2 already publishes the transform from map to base_link. However, if you want to publish the transform from odom to base_link, you can uncomment the following lines:
+        # t = TransformStamped()
+        # t.transform.translation.x = msg.pose.pose.position.x
+        # t.transform.translation.y = msg.pose.pose.position.y
+        # t.transform.translation.z = msg.pose.pose.position.z
+        # t.transform.rotation = msg.pose.pose.orientation
+        # self.tf_broadcaster.sendTransform(t)
 
         smooth = Odometry()
         smooth.header.stamp = stamp

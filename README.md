@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-# TerraScout – Perception & Mission
-
-Project repository for the **DVA490 / DVA474 – Projektkurs i Robotik** course at Mälardalen University (MDU), autumn semester 2026 (HT2026).
-
-Course center: [Projects @ Collaborative Center (C2) MDU](https://github.com/MDU-C2)
-=======
 # SAGE
 
 [![CI](https://github.com/SLaRCLabs/sage/actions/workflows/ci.yml/badge.svg)](https://github.com/SLaRCLabs/sage/actions/workflows/ci.yml)
@@ -143,4 +136,3 @@ Emil Persson, Mälardalen University, emil.persson@mdu.se
 ## License
 
 MIT © Emil Persson. Third-party components and their licenses are listed in `THIRD_PARTY_NOTICES`.
->>>>>>> 96b15b9 (SAGE 0.1.0: fleet management for ground and aerial robots on ROS 2 Jazzy)

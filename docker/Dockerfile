@@ -30,6 +30,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     python3-colcon-common-extensions \
     python3-scipy \
     "ros-${ROS_DISTRO}-ament-cmake-python" \
+    # --------NEW: needed to install STVL----------
+    "ros-${ROS_DISTRO}-ament-cmake-vendor-package" \
+    # ----------------------------------------------
     "ros-${ROS_DISTRO}-ament-package" \
     "ros-${ROS_DISTRO}-navigation2" \
     "ros-${ROS_DISTRO}-xacro" \
@@ -37,8 +40,32 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     "ros-${ROS_DISTRO}-foxglove-bridge" \
     "ros-${ROS_DISTRO}-foxglove-msgs" \
     "ros-${ROS_DISTRO}-mqtt-client" \
+    # -------NEW (need for STVL)------------
+    libopenvdb-dev \
+    libblosc-dev \
+    libboost-iostreams-dev \
+    libboost-thread-dev \
+    libtbb-dev \
+    zlib1g-dev \
+    # --------------------------------------
     libgtest-dev \
     libnanoflann-dev \
+    #---- NEW: FAST-LIO2 dependencies------------------
+    libeigen3-dev \
+    libpcl-dev \
+    libomp-dev \
+    libapr1-dev \
+    libaprutil1-dev \
+    python3-dev \
+    "ros-${ROS_DISTRO}-ament-cmake-auto" \
+    "ros-${ROS_DISTRO}-pcl-ros" \
+    "ros-${ROS_DISTRO}-rclcpp-components" \
+    "ros-${ROS_DISTRO}-rosidl-default-generators" \
+    # GridMap dependencies for CPU elevation mapping - Not sure where yet
+    "ros-${ROS_DISTRO}-grid-map-core" \
+    "ros-${ROS_DISTRO}-grid-map-ros" \
+    "ros-${ROS_DISTRO}-grid-map-msgs" \
+    # ----------------------------------------------
     "ros-${ROS_DISTRO}-pcl-conversions" \
     "ros-${ROS_DISTRO}-twist-mux" \
     "ros-${ROS_DISTRO}-rosbag2-storage-mcap" \
@@ -139,6 +166,14 @@ RUN pip install --break-system-packages --no-cache-dir \
 RUN git config --system --add safe.directory '*' && \
     ln -s /workspace/src/third_party/PX4-Autopilot /opt/px4
 
+
+
+COPY docker/nav2_cpu_fix/libmppi_controller.so \ 
+    /opt/ros/${ROS_DISTRO}/lib/libmppi_controller.so
+
+COPY docker/nav2_cpu_fix/libmppi_critics.so \
+    /opt/ros/${ROS_DISTRO}/lib/libmppi_critics.so
+
 FROM base AS physical
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -155,8 +190,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     "ros-${ROS_DISTRO}-diff-drive-controller" \
     "ros-${ROS_DISTRO}-joint-state-broadcaster" \
     "ros-${ROS_DISTRO}-microstrain-inertial-driver" \
-    libapr1-dev \
-    libaprutil1-dev \
+    # These dependencies are needed for building FAST-LIO2 - they placed above instead
+    #libapr1-dev \
+    #libaprutil1-dev \
     libyaml-cpp-dev \
     libboost-all-dev \
     zlib1g-dev \
