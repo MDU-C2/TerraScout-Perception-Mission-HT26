@@ -36,10 +36,28 @@ def test_simulation_mounts_host_gpu_without_nvidia_runtime(tmp_path, monkeypatch
     compose = yaml.safe_load((out / "compose.yaml").read_text())
     world = compose["services"]["world"]
 
+    # assert world["devices"] == ["/dev/dri:/dev/dri"]
+    # assert len(world["group_add"]) == 2
+    # assert "runtime" not in world
+    # assert "deploy" not in world
+    # assert not any(
+    #     name.startswith(("NVIDIA_", "__NV")) for name in world["environment"]
+    # )
+
     assert world["devices"] == ["/dev/dri:/dev/dri"]
     assert len(world["group_add"]) == 2
-    assert "runtime" not in world
-    assert "deploy" not in world
-    assert not any(
-        name.startswith(("NVIDIA_", "__NV")) for name in world["environment"]
-    )
+
+    assert world["runtime"] == "nvidia"
+
+    gpu_devices = world["deploy"]["resources"]["reservations"]["devices"]
+
+    assert gpu_devices == [
+        {
+            "driver": "nvidia",
+            "count": "all",
+            "capabilities": ["gpu"],
+        }
+    ]
+
+    assert world["environment"]["NVIDIA_VISIBLE_DEVICES"] == "all"
+    assert world["environment"]["NVIDIA_DRIVER_CAPABILITIES"] == "all"

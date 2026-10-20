@@ -90,7 +90,7 @@ PHYSICAL_ONLY
             terrascout_navigation/fast_lio_odom.py in CMakeLists.txt
 
         changed:
-            commented out mapping for /odom gazebo bridge (using fast-lio instead)
+            commented out mapping for /odom gazebo bridge (using fast-lio instead) in src/terrascout_description/config/gz_bridge.yaml
             commented out a part in def _odom_cb in src/terrascout_navigation/terrascout_navigation/gnss_shim.py
 
 
