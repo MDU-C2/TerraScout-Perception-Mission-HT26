@@ -13,6 +13,8 @@ set(FLEET_INTERFACES_MSG_FILES
   msg/MissionCommand.msg
   msg/MissionPlan.msg
   msg/MissionState.msg
+  msg/Enemy.msg
+  msg/EnemyArray.msg
   action/ExecuteMission.action
   srv/ControlMission.srv
 )
