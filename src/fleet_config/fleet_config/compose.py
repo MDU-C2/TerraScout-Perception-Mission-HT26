@@ -114,13 +114,13 @@ def _unit_environment(unit: UnitContext) -> dict[str, str]:
     return environment
 
 
-def _display_environment(gpu: bool) -> dict[str, str]:
+def _display_environment(gpu: str) -> dict[str, str]:
     environment = {
         "DISPLAY": DISPLAY_VARIABLE,
         "QT_QPA_PLATFORM": "xcb",
         "QT_X11_NO_MITSHM": "1",
     }
-    if gpu:
+    if gpu == "nvidia":
         environment.update(
             {
                 "__NV_PRIME_RENDER_OFFLOAD": "1",
@@ -132,19 +132,25 @@ def _display_environment(gpu: bool) -> dict[str, str]:
     return environment
 
 
-def _gpu_settings() -> dict[str, Any]:
-    return {
-        "devices": [GPU_DEVICE_MOUNT],
-        "group_add": list(GPU_GROUPS),
-        "runtime": "nvidia",
-        "deploy": {
-            "resources": {
-                "reservations": {
-                    "devices": [{"driver": "nvidia", "count": "all", "capabilities": ["gpu"]}]
+def _gpu_settings(gpu: str) -> dict[str, Any]:
+    if gpu == "nvidia":
+        return {
+            "devices": [GPU_DEVICE_MOUNT],
+            "group_add": list(GPU_GROUPS),
+            "runtime": "nvidia",
+            "deploy": {
+                "resources": {
+                    "reservations": {
+                        "devices": [{"driver": "nvidia", "count": "all", "capabilities": ["gpu"]}]
+                    }
                 }
-            }
-        },
-    }
+            },
+        }
+    else:
+        return {
+            "devices": [GPU_DEVICE_MOUNT],
+            "group_add": list(GPU_GROUPS),
+        }
 
 
 def _unit_service(unit: UnitContext, dependencies: list[str]) -> dict[str, Any]:
@@ -172,7 +178,7 @@ def _unit_service(unit: UnitContext, dependencies: list[str]) -> dict[str, Any]:
         service["device_cgroup_rules"] = [JOYSTICK_DEVICE_RULE]
         service["group_add"] = list(DEVICE_GROUPS)
     if world and unit.simulation.gpu:
-        service.update(_gpu_settings())
+        service.update(_gpu_settings(unit.simulation.gpu))
     if dependencies:
         service["depends_on"] = {name: {"condition": "service_started"} for name in dependencies}
     service["stop_grace_period"] = f"{UNIT_STOP_GRACE_SECONDS}s"
