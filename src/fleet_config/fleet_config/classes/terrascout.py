@@ -764,6 +764,23 @@ def keepout_server(unit: UnitContext, after: list[str]) -> Process:
         ready=NodeProbe(f"/{unit.namespace}/{KEEPOUT_SERVER}"),
     )
 
+# NEW For distributad simulation (NUC and PC)
+def simulation_interface_processes(unit: UnitContext) -> list[Process]:
+    """Processes that must stay alongside Gazebo."""
+    stage_after = [ROBOT_SPAWN, CLOCK_BRIDGE]
+
+    return [
+        world_ready(unit, gz_environment(unit), after=(ROUTER,)),
+        ground_spawn(unit),
+        entity_watch(unit, after=[ROBOT_SPAWN]),
+        clock_bridge(unit),
+        gz_bridge(
+            unit,
+            stage_after,
+            MessageProbe(f"/{unit.namespace}/{CAMERA_TOPIC}"),
+        ),
+    ]
+
 
 def processes(unit: UnitContext) -> list[Process]:
     simulated = unit.mode == SIMULATION
@@ -771,21 +788,17 @@ def processes(unit: UnitContext) -> list[Process]:
     localization = localization_processes(unit, stage_after)
     navigation_after = [process.name for process in localization] if simulated else [CLOCK_SYNC]
     entries: list[Process] = []
+
     if simulated:
-        entries += [
-            world_ready(unit, gz_environment(unit), after=(ROUTER,)),
-            ground_spawn(unit),
-            entity_watch(unit, after=[ROBOT_SPAWN]),
-            clock_bridge(unit),
-        ]
+        entries += simulation_interface_processes(unit)
     else:
         entries.append(clock_sync([ROUTER]))
+
     entries += localization
+
     if simulated:
-        entries.append(
-            gz_bridge(unit, stage_after, MessageProbe(f"/{unit.namespace}/{CAMERA_TOPIC}"))
-        )
         entries.append(fast_lio_simulation(unit))
+
         entries.append(fast_lio_odom_adapter(unit, [FAST_LIO]))
         navigation_after = [process.name for process in localization] + [
             "gz_bridge", FAST_LIO, "fast_lio_odom_adapter"
