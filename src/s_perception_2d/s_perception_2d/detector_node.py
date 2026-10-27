@@ -82,7 +82,8 @@ class YoloDetectorNode(Node):
 
         # ---------------- Parameters Declaration ----------------
         self._declare_param("model_path", "")
-        self._declare_param("confidence_threshold", 0.35)
+        self._declare_param("confidence_threshold", 0.50)
+        self._declare_param("min_noise_threshold", 0.15)
         self._declare_param("iou_threshold", 0.45)
         self._declare_param("input_image_topic", "oakd/rgb/image_raw")
         self._declare_param("output_detections_topic", "oakd/detections_2d")
@@ -90,7 +91,7 @@ class YoloDetectorNode(Node):
         self._declare_param("annotated_image_topic", "oakd/detections_image")
         self._declare_param(
             "configured_classes",
-            ["pedestrian_sign", "roadwork_sign", "stop-sign", "traffic-cone"],
+            ["Apache friendly", "Ka-52 Enemy"],
         )
         self._declare_param("allow_unknown_records", True)
         self._declare_param("enable_file_logging", True)
@@ -103,6 +104,7 @@ class YoloDetectorNode(Node):
         # ---------------- Retrieve Parameters ----------------
         model_path_param = self.get_parameter("model_path").get_parameter_value().string_value
         self.conf_threshold = float(self.get_parameter("confidence_threshold").value)
+        self.min_noise_threshold = float(self.get_parameter("min_noise_threshold").value)
         self.iou_threshold = float(self.get_parameter("iou_threshold").value)
         self.input_image_topic = self.get_parameter("input_image_topic").value
         self.output_detections_topic = self.get_parameter("output_detections_topic").value
@@ -135,11 +137,13 @@ class YoloDetectorNode(Node):
         self.model_classes = self.model.names if hasattr(self.model, "names") else {}
         self.get_logger().info(f"Model classes: {self.model_classes}")
         self.get_logger().info(f"Configured supported classes: {self.configured_classes}")
+        self.get_logger().info(f"Confidence threshold: {self.conf_threshold}, Min noise threshold: {self.min_noise_threshold}")
 
         # Initialize ObjectRecordHandler & PerceptionLogger
         self.record_handler = ObjectRecordHandler(
             configured_classes=self.configured_classes,
             confidence_threshold=self.conf_threshold,
+            min_noise_threshold=self.min_noise_threshold,
             allow_unknown_records=self.allow_unknown_records,
         )
         self.logger_handler = PerceptionLogger(
@@ -261,7 +265,7 @@ class YoloDetectorNode(Node):
         try:
             results = self.model.predict(
                 source=cv_image,
-                conf=self.conf_threshold,
+                conf=self.min_noise_threshold,
                 iou=self.iou_threshold,
                 imgsz=self.inference_imgsz,
                 verbose=False,
@@ -274,7 +278,7 @@ class YoloDetectorNode(Node):
             try:
                 results = self.model.predict(
                     source=cv_image,
-                    conf=self.conf_threshold,
+                    conf=self.min_noise_threshold,
                     iou=self.iou_threshold,
                     imgsz=self.inference_imgsz,
                     verbose=False,
@@ -361,10 +365,8 @@ class YoloDetectorNode(Node):
 
         # Class color palette (BGR)
         palette = {
-            "warning_bag": (0, 0, 255),       # Red
-            "stop-sign": (0, 140, 255),       # Orange
-            "pedestrian_sign": (255, 200, 0), # Cyan-Blue
-            "roadwork_sign": (0, 255, 255),   # Yellow
+            "Apache friendly": (0, 255, 0),   # Green
+            "Ka-52 Enemy": (0, 0, 255),       # Red
             "unknown": (180, 180, 180),       # Grey
         }
 

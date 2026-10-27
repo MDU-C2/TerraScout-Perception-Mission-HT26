@@ -14,13 +14,14 @@ def test_perception_logger(tmp_path: Path):
     logger = PerceptionLogger(log_dir=str(tmp_path), enable_file_logging=True)
 
     handler = ObjectRecordHandler(
-        configured_classes=["warning_bag", "stop-sign"],
-        confidence_threshold=0.30,
+        configured_classes=["Apache friendly", "Ka-52 Enemy"],
+        confidence_threshold=0.50,
+        min_noise_threshold=0.15,
     )
 
-    rec1 = handler.validate_and_create_record("warning_bag", 0.90, (10, 10, 50, 50), "frame_1")
+    rec1 = handler.validate_and_create_record("Apache friendly", 0.90, (10, 10, 50, 50), "frame_1")
     rec2 = handler.validate_and_create_record("unknown_thing", 0.80, (20, 20, 60, 60), "frame_1")
-    rec3 = handler.validate_and_create_record("warning_bag", 0.10, (5, 5, 15, 15), "frame_1")  # Invalid (low conf)
+    rec3 = handler.validate_and_create_record("Apache friendly", 0.10, (5, 5, 15, 15), "frame_1")  # Invalid (noise floor)
 
     logger.log_frame_detections(
         frame_id="frame_1",
@@ -32,7 +33,7 @@ def test_perception_logger(tmp_path: Path):
     stats = logger.get_stats()
     assert stats["total_frames"] == 1
     assert stats["total_detections"] == 3
-    assert stats["configured_classes"]["warning_bag"] == 1
+    assert stats["configured_classes"]["Apache friendly"] == 1
     assert stats["unknown_records"] == 1
     assert stats["invalid_records"] == 1
 
@@ -45,5 +46,5 @@ def test_perception_logger(tmp_path: Path):
         assert entry["frame_id"] == "frame_1"
         assert entry["num_detections"] == 3
         assert len(entry["records"]) == 3
-        assert entry["records"][0]["class_name"] == "warning_bag"
+        assert entry["records"][0]["class_name"] == "Apache friendly"
         assert entry["records"][1]["class_name"] == "unknown"

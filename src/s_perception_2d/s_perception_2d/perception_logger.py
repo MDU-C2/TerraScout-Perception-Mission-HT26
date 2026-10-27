@@ -39,7 +39,11 @@ class PerceptionLogger:
         }
 
         if self.enable_file_logging:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.log_dir.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError):
+                self.log_dir = Path.home() / ".ros" / "s_perception_2d_logs"
+                self.log_dir.mkdir(parents=True, exist_ok=True)
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.jsonl_path = self.log_dir / f"detections_{timestamp_str}.jsonl"
 

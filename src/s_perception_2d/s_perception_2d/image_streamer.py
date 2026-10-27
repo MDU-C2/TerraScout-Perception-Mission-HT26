@@ -23,12 +23,21 @@ class ImageStreamerNode(Node):
     def __init__(self):
         super().__init__('image_streamer_node')
 
+        # Search upwards for dataset directory
+        cur = Path(__file__).resolve().parent
+        ws_root = cur
+        for p in [cur] + list(cur.parents):
+            if (p / "dataset").is_dir():
+                ws_root = p
+                break
+
+        default_dir = ws_root / "dataset" / "Car-Silhouettes-Forest.v1i.yolov8" / "test" / "images"
+        if not default_dir.exists():
+            default_dir = ws_root / "dataset" / "test" / "images"
+
         self._declare_param('topic', '/terrascout1/oakd/rgb/image_raw')
         self._declare_param('rate_hz', 2.0)
-        self._declare_param(
-            'image_dir',
-            '/home/sadra/sage-0.1.0-extracted/dataset/combined_dataset.v1i.yolov8/test/images'
-        )
+        self._declare_param('image_dir', str(default_dir))
 
         self.topic_name = self.get_parameter('topic').get_parameter_value().string_value
         self.rate_hz = self.get_parameter('rate_hz').get_parameter_value().double_value
@@ -37,9 +46,14 @@ class ImageStreamerNode(Node):
         self.publisher = self.create_publisher(Image, self.topic_name, 10)
         self.bridge = CvBridge()
 
-        # Find test images
-        self.image_files = sorted(glob.glob(os.path.join(self.image_dir, '*.jpg'))) + \
-                           sorted(glob.glob(os.path.join(self.image_dir, '*.png')))
+        # Find test images (supports directory or single image file)
+        if os.path.isfile(self.image_dir):
+            self.image_files = [self.image_dir]
+        elif os.path.isdir(self.image_dir):
+            self.image_files = sorted(glob.glob(os.path.join(self.image_dir, '*.jpg'))) + \
+                               sorted(glob.glob(os.path.join(self.image_dir, '*.png')))
+        else:
+            self.image_files = []
 
         if not self.image_files:
             self.get_logger().error(f"No images found in {self.image_dir}")
