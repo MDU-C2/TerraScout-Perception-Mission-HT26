@@ -203,6 +203,7 @@ class Fleet:
     groups: Mapping[str, RobotGroup]
     station: Station | None
     site: Mapping[str, str]
+    deployment: str = "combined"
 
     @property
     def use_sim_time(self) -> bool:
@@ -217,6 +218,8 @@ class SimTarget:
     seed: int
     gpu: bool = False
     features: Features = Features()
+    deployment: str = "combined"
+    topology: Topology | None = None
 
     def fleet(self, name: str) -> Fleet:
         return Fleet(
@@ -224,10 +227,11 @@ class SimTarget:
             mode=SIMULATION,
             simulation=Simulation(self.world, self.datum, self.seed, self.gpu),
             features=self.features,
-            topology=None,
+            topology=self.topology,
             groups=MappingProxyType(dict(self.groups)),
             station=Station(),
             site=MappingProxyType({}),
+            deployment=self.deployment,
         )
 
 

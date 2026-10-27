@@ -13,6 +13,7 @@ from fleet_config.model import (
     SourceFile,
     StationTarget,
     Target,
+    Topology,
     World,
 )
 from pathlib import Path
@@ -44,4 +45,6 @@ TARGETS: dict[str, Target] = {
     "sim-record": replace(SIM, features=Features(recording_enabled=True)),
     "sim-madum": replace(SIM, features=Features(recording_enabled=True, madum_enabled=True)),
     "station": StationTarget(robots=(("terrascout1", TERRASCOUT),)),
+    "sim-pc": replace(SIM,deployment="pc",topology=Topology(uplink_address="130.243.66.211",uplink_interface="eno1",),),
+    "sim-nuc": replace(SIM,deployment="nuc",topology=Topology(uplink_address="130.243.66.211",uplink_interface="enp86s0",),),
 }

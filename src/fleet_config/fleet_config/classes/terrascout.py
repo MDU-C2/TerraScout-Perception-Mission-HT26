@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from dataclasses import replace
 from collections.abc import Mapping
 
 from fleet_config.checks import (
@@ -781,8 +781,53 @@ def simulation_interface_processes(unit: UnitContext) -> list[Process]:
         ),
     ]
 
+# NEW For distributad simulation (NUC and PC)
+def simulation_navigation_processes(unit: UnitContext) -> list[Process]:
+    """ROS 2 perception and navigation processes running on the NUC.          """
+    """E.g., FAST-LIO2 and its odometry adapter, ground segm., LiDAR filtering"""
+    """Nav2, including STVL, Smac Planner, and MPPI                           """
+    """Mission handling and Foxglove Bridge                                   """
+
+    local_after = [ROUTER]
+    localization = localization_processes(unit, local_after)
+
+    entries = [
+        *localization,
+
+        # FAST-LIO2 runs on the NUC, not alongside Gazebo.
+        replace(fast_lio_simulation(unit), after=(ROUTER,)),
+
+        fast_lio_odom_adapter(unit, [FAST_LIO]),
+
+        twist_mux(unit, [ROUTER, BATTERY]),
+
+        *teleop_processes(unit, local_after),
+        *foxglove_processes(unit, local_after),
+
+        *nav2_processes(
+            unit,
+            [process.name for process in localization]
+            + [FAST_LIO, "fast_lio_odom_adapter"],
+        ),
+
+        mission_server(unit, [NAV2]),
+        keepout_server(unit, [NAV2]),
+        unit_agent(unit),
+    ]
+
+    entries += madum_processes(unit)
+    entries += recorder_process(unit, recorded_topics(unit))
+
+    return entries
+
 
 def processes(unit: UnitContext) -> list[Process]:
+    if unit.mode == SIMULATION:
+        if unit.deployment == "pc":
+            return simulation_interface_processes(unit)
+
+        if unit.deployment == "nuc":
+            return simulation_navigation_processes(unit)
     simulated = unit.mode == SIMULATION
     stage_after = [ROBOT_SPAWN, CLOCK_BRIDGE] if simulated else [CLOCK_SYNC]
     localization = localization_processes(unit, stage_after)

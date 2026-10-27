@@ -367,7 +367,12 @@ def unit_session(unit: UnitContext) -> dict[str, Any]:
 
 def fleet_router_address(fleet: Fleet) -> str:
     if fleet.mode == SIMULATION:
-        return LOOPBACK_ADDRESS
+        return (
+            fleet.topology.uplink_address
+            if fleet.topology is not None
+            else LOOPBACK_ADDRESS
+        )
+
     assert fleet.station is not None
     return site_value(fleet.site, fleet.station.id, UPLINK_ADDRESS_KEY)
 

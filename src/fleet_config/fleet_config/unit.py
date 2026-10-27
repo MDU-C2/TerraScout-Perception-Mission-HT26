@@ -73,10 +73,13 @@ class UnitContext:
     simulation: Simulation | None = None
     gz_resource_paths: tuple[str, ...] = ()
     site: Mapping[str, str] = MappingProxyType({})
+    deployment: str = "combined"
 
     @property
     def on_fleet_host(self) -> bool:
-        return self.mode == SIMULATION or self.kind == STATION
+        return self.kind == STATION or (
+            self.mode == SIMULATION and self.deployment != "nuc"
+        )
 
     @property
     def router_tcp_port(self) -> int:
@@ -150,6 +153,56 @@ def robot_exports(namespace: str, robot_class: RobotClass) -> tuple[BoundaryEntr
     )
 
 
+def distributed_simulation_boundary(
+    namespace: str,
+    robot_class: RobotClass,
+    deployment: str,
+) -> Boundary:
+    """ROS 2 topics exchanged between the simulation PC and NUC."""
+
+    # Sensor data published by Gazebo on the PC.
+    sensor_topics = (
+        ("/clock", CLOCK_TYPE),
+        (f"/{namespace}/lidar_points_raw", "sensor_msgs/msg/PointCloud2"),
+        (f"/{namespace}/microstrain/imu/data", "sensor_msgs/msg/Imu"),
+        (f"/{namespace}/navsat", "sensor_msgs/msg/NavSatFix"),
+        (f"/{namespace}/joint_states", "sensor_msgs/msg/JointState"),
+        (f"/{namespace}/odom_gt", "nav_msgs/msg/Odometry"),
+    )
+
+    sensors = tuple(
+        BoundaryEntry(topic, msg_type, None, None)
+        for topic, msg_type in sensor_topics
+    )
+
+    # Final velocity command generated on the NUC.
+    cmd_vel = BoundaryEntry(
+        f"/{namespace}/cmd_vel",
+        "geometry_msgs/msg/TwistStamped",
+        None,
+        namespace,
+    )
+
+    if deployment == "pc":
+        return Boundary(
+            exports=sensors,
+            imports=(cmd_vel,),
+        )
+
+    if deployment == "nuc":
+        return Boundary(
+            exports=(
+                *robot_exports(namespace, robot_class),
+                cmd_vel,
+            ),
+            imports=sensors,
+        )
+
+    return Boundary(
+        exports=robot_exports(namespace, robot_class),
+    )
+
+
 def world_boundary() -> Boundary:
     return Boundary()
 
@@ -208,14 +261,15 @@ def contexts(
                 instance=instance,
                 mode=robot.mode,
                 use_sim_time=robot.use_sim_time,
-                boundary=Boundary(exports=robot_exports(robot.id, robot.robot_class)),
+                boundary=distributed_simulation_boundary(robot.id,robot.robot_class,fleet.deployment,),
                 robot=robot,
                 topology=robot.topology,
                 simulation=robot.simulation,
                 site=fleet.site,
+                deployment=fleet.deployment,
             )
         )
-    if fleet.simulation is not None:
+    if fleet.simulation is not None and fleet.deployment != "nuc":
         units.append(
             UnitContext(
                 id=WORLD_UNIT_ID,
@@ -228,9 +282,10 @@ def contexts(
                 boundary=world_boundary(),
                 simulation=fleet.simulation,
                 gz_resource_paths=_world_resource_paths(robots),
+                deployment=fleet.deployment,
             )
         )
-    if fleet.station is not None:
+    if fleet.station is not None and fleet.deployment != "nuc":
         station = replace(
             fleet.station,
             robots=tuple((robot.id, robot.robot_class) for robot in robots) + fleet.station.robots,
@@ -248,6 +303,7 @@ def contexts(
                 station=station,
                 simulation=fleet.simulation,
                 site=fleet.site,
+                deployment=fleet.deployment,
             )
         )
     return units

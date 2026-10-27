@@ -214,7 +214,7 @@ def fleet_summary(fleet: Fleet, units: list[UnitContext], instance: Instance) ->
         "target": fleet.name,
         "mode": fleet.mode,
         "image": image(fleet.mode),
-        "gui": fleet.simulation is not None,
+        "gui": any(unit.kind == WORLD for unit in units),
         "instance": instance.index,
         "domain_id": instance.domain_id,
         "units": [{"id": unit.id, "kind": unit.kind, "service": unit.service} for unit in units],
