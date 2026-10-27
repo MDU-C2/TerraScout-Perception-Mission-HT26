@@ -26,3 +26,5 @@ runs_yolo/
 .ruff_cache/
 /site.yaml
 
+dataset/
+dataset_captured/
