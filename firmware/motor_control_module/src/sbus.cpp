@@ -7,14 +7,10 @@
 #include "esp_timer.h"
 #include "freertos/task.h"
 
-static constexpr uint8_t SBUS_HEADER = 0x0F;
-static constexpr int     SBUS_BAUD = 100000; // SBUS standard baud rate
-static constexpr int     UART_RX_BUF = 256;
-
 Sbus::Sbus(uart_port_t port, gpio_num_t rx_pin) : uart_num_(port)
 {
     uart_config_t cfg = {};
-    cfg.baud_rate = SBUS_BAUD;
+    cfg.baud_rate = config::SBUS_BAUD;
     cfg.data_bits = UART_DATA_8_BITS;
     cfg.parity = UART_PARITY_EVEN;
     cfg.stop_bits = UART_STOP_BITS_2;
@@ -29,7 +25,8 @@ Sbus::Sbus(uart_port_t port, gpio_num_t rx_pin) : uart_num_(port)
     // SBUS signal uses invert
     ESP_ERROR_CHECK(uart_set_line_inverse(uart_num_, UART_SIGNAL_RXD_INV));
     
-    ESP_ERROR_CHECK(uart_driver_install(uart_num_, UART_RX_BUF, 0, 0, nullptr, 0));
+    ESP_ERROR_CHECK(
+        uart_driver_install(uart_num_, config::SBUS_UART_RX_BUFFER, 0, 0, nullptr, 0));
 }
 
 Sbus::~Sbus()
@@ -46,19 +43,19 @@ bool Sbus::footer_ok(uint8_t b)
 
 void Sbus::push_byte(uint8_t b, SbusFrame &latest, bool &got)
 {
-    if (win_len_ == FRAME_LEN) {
-        memmove(win_, win_ + 1, FRAME_LEN - 1);
-        win_len_ = FRAME_LEN - 1;
+    if (win_len_ == config::SBUS_FRAME_LEN) {
+        memmove(win_, win_ + 1, config::SBUS_FRAME_LEN - 1);
+        win_len_ = config::SBUS_FRAME_LEN - 1;
     }
     win_[win_len_++] = b;
 
-    while (win_len_ > 0 && win_[0] != SBUS_HEADER) {
+    while (win_len_ > 0 && win_[0] != config::SBUS_HEADER) {
         memmove(win_, win_ + 1, win_len_ - 1);
         win_len_--;
     }
 
-    if (win_len_ == FRAME_LEN) {
-        if (footer_ok(win_[FRAME_LEN - 1])) {
+    if (win_len_ == config::SBUS_FRAME_LEN) {
+        if (footer_ok(win_[config::SBUS_FRAME_LEN - 1])) {
             parse_frame(win_, latest);
             last_frame_us_ = esp_timer_get_time();
             good_frames_++;

@@ -6,6 +6,7 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
+#include "config.h"
 
 struct SbusFrame {
     uint16_t channels[16] = {};
@@ -18,11 +19,6 @@ struct SbusFrame {
 
 class Sbus {
 public:
-    static constexpr size_t   FRAME_LEN = 25;
-    static constexpr uint16_t CH_MIN = 172;
-    static constexpr uint16_t CH_MID = 992;
-    static constexpr uint16_t CH_MAX = 1811;
-
     Sbus(uart_port_t port, gpio_num_t rx_pin);
     ~Sbus();
 
@@ -45,7 +41,7 @@ private:
 
     uart_port_t uart_num_;
 
-    uint8_t win_[FRAME_LEN] = {};
+    uint8_t win_[config::SBUS_FRAME_LEN] = {};
     size_t  win_len_ = 0;
 
     int64_t  last_frame_us_ = 0;
