@@ -25,6 +25,10 @@ cell voltages, and Missing/Fresh/Stale once per second. Save the raw frames if
 CRC or sequence checks fail. A CRC match checks the implemented coverage only;
 compare readings with the battery app. Full ESP32 build remains to be verified.
 
+`bms_interface.hpp/.cpp` is the single firmware BMS decoder. The duplicate
+`bms.hpp/.cpp` implementation has been removed; both the battery task and
+standalone monitor use `BmsInterface`.
+
 Reuse `can.hpp` and `can.cpp`; do not copy the driver for the battery.
 `BmsInterface` references a caller-owned `Can` instance, exposes raw frames,
 and assembles the documented Tattu 12S format (48 payload bytes plus 2 CRC bytes).

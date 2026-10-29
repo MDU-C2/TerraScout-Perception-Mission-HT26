@@ -58,8 +58,6 @@ inline constexpr double  TWO_PI = 6.28318530717958647692;
 inline constexpr int64_t CONTROLLER_INPUT_TIMEOUT_US = 200000;
 
 // Tattu BMS
-inline constexpr uint32_t TATTU_BMS_CAN_ID = 0x01109216;
-inline constexpr size_t   TATTU_BMS_PAYLOAD_SIZE = 50;
 // Separate battery transceiver: leave disabled until board GPIOs are verified.
 inline constexpr bool BATTERY_CAN_ENABLED = false;
 inline constexpr gpio_num_t BATTERY_CAN_TX_PIN = static_cast<gpio_num_t>(-1);

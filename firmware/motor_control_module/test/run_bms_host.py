@@ -13,9 +13,6 @@ root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="terrascout-bms-") as directory:
     tmp = Path(directory)
     shutil.copy(root / "include/bms_interface.hpp", tmp / "bms_interface.hpp")
-    shutil.copy(root / "include/bms.hpp", tmp / "bms.hpp")
-    (tmp / "config.h").write_text("#pragma once\nnamespace config { constexpr unsigned TATTU_BMS_CAN_ID=0x01109216; constexpr unsigned TATTU_BMS_PAYLOAD_SIZE=50; }\n")
-    (tmp / "esp_timer.h").write_text("#pragma once\n#include <cstdint>\nextern int64_t bms_test_now; inline int64_t esp_timer_get_time(){return bms_test_now;}\n")
     (tmp / "can.hpp").write_text("""#pragma once
 #include <cstddef>
 #include <cstdint>
@@ -30,7 +27,6 @@ int receive(Frame&, uint32_t) { return 3; }
     subprocess.run([os.environ.get("CXX", "c++"), "-std=c++17", "-Wall",
                     "-Wextra", "-Werror", "-I", str(tmp),
                     str(root / "src/bms_interface.cpp"),
-                    str(root / "src/bms.cpp"),
                     str(root / "test/bms_host.cpp"), "-o", str(tmp / "test")], check=True)
     subprocess.run([str(tmp / "test")], check=True)
 print("BMS host tests passed")
