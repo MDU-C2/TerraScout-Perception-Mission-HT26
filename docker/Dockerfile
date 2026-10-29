@@ -33,6 +33,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     "ros-${ROS_DISTRO}-ament-cmake-vendor-package" \
     "ros-${ROS_DISTRO}-ament-package" \
     "ros-${ROS_DISTRO}-navigation2" \
+    "ros-${ROS_DISTRO}-grid-map-msgs" \
     "ros-${ROS_DISTRO}-xacro" \
     "ros-${ROS_DISTRO}-rmw-zenoh-cpp" \
     "ros-${ROS_DISTRO}-foxglove-bridge" \

@@ -183,6 +183,58 @@ def distributed_simulation_boundary(
         namespace,
     )
 
+    if deployment == "elevation-pc":
+        return Boundary(
+            exports=(
+                *robot_exports(namespace, robot_class),
+
+                # Sensor data for Jetson elevation mapping
+                BoundaryEntry(
+                    "/clock",
+                    CLOCK_TYPE,
+                    None,
+                    None,
+                ),
+                BoundaryEntry(
+                    f"/{namespace}/lidar_points_raw",
+                    "sensor_msgs/msg/PointCloud2",
+                    None,
+                    None,
+                ),
+
+                BoundaryEntry(
+                    f"/{namespace}/lidar_points_filtered",
+                    "sensor_msgs/msg/PointCloud2",
+                    None,
+                    None,
+                ),
+
+                # Robot transformations
+                BoundaryEntry(
+                    f"/{namespace}/tf",
+                    "tf2_msgs/msg/TFMessage",
+                    None,
+                    None,
+                ),
+                BoundaryEntry(
+                    f"/{namespace}/tf_static",
+                    "tf2_msgs/msg/TFMessage",
+                    None,
+                    None,
+                ),
+            ),
+
+            # Elevation map produced by the Jetson
+            imports=(
+                BoundaryEntry(
+                    "/elevation_mapping_node/elevation_map",
+                    "grid_map_msgs/msg/GridMap",
+                    None,
+                    None,
+                ),
+            ),
+        )
+
     if deployment == "pc":
         return Boundary(
             exports=sensors,

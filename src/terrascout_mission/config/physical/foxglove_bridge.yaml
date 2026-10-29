@@ -7,6 +7,7 @@
     max_qos_depth: 5
     topic_whitelist:
     - ^/rosout$
+    - ^/elevation_mapping_node/elevation_map$
     - ^/<robot_namespace>/battery_state$
     - ^/<robot_namespace>/clicked_point$
     - ^/<robot_namespace>/cmd_vel$

@@ -47,5 +47,5 @@ TARGETS: dict[str, Target] = {
     "station": StationTarget(robots=(("terrascout1", TERRASCOUT),)),
     "sim-pc": replace(SIM,deployment="pc",topology=Topology(uplink_address="130.243.66.211",uplink_interface="eno1",),),
     "sim-nuc": replace(SIM,deployment="nuc",topology=Topology(uplink_address="130.243.66.211",uplink_interface="enp86s0",),),
-    "sim-elevation-pc": replace(SIM,topology=Topology(uplink_address="130.243.66.211",uplink_interface="eno1",),),
+    "sim-elevation-pc": replace(SIM,deployment="elevation-pc",topology=Topology(uplink_address="130.243.66.211",uplink_interface="eno1",),),
 }
