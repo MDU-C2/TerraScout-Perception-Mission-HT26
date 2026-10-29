@@ -60,6 +60,8 @@ public:
 
     /** Start bus-off recovery (only meaningful if isBusOff()). */
     esp_err_t recover();
+    // Task-context snapshot; call at a low rate while diagnosing TX failures.
+    void logDiagnostics();
 
     bool isBusOff() const { return bus_off_; }
     uint32_t droppedRx() const { return rx_dropped_; }
@@ -67,23 +69,30 @@ public:
 private:
     static bool onRxDone(twai_node_handle_t node, const twai_rx_done_event_data_t *edata, void *ctx);
     static bool onStateChange(twai_node_handle_t node, const twai_state_change_event_data_t *edata, void *ctx);
+    static bool onTxDone(twai_node_handle_t node, const twai_tx_done_event_data_t *edata, void *ctx);
 
     twai_node_handle_t node_ = nullptr;
     QueueHandle_t rx_queue_ = nullptr;
     SemaphoreHandle_t tx_mutex_ = nullptr;
     bool enabled_ = false;
 
-    // The driver passes frames by pointer, so each queued frame and its data
-    // buffer must stay valid until it has been transmitted. We keep a ring of
-    // (tx_queue_depth + 1) slots: the driver can never hold more than
-    // tx_queue_depth pending frames, so the slot being reused is always free.
+    // Reserve each slot until its exact frame completes. Never reuse slots
+    // based on queue depth or failed enqueue attempts.
     struct TxSlot {
         twai_frame_t frame;
         uint8_t buf[8];
+        bool in_use;
     };
     TxSlot *slots_ = nullptr;
     size_t slot_count_ = 0;
-    size_t next_slot_ = 0;  // protected by tx_mutex_
+    portMUX_TYPE slots_lock_ = portMUX_INITIALIZER_UNLOCKED;
+    uint32_t tx_queued_ = 0;
+    uint32_t tx_done_ = 0;
+    uint32_t tx_failed_ = 0;
+    uint32_t tx_unmatched_ = 0;
+    uint32_t no_slot_ = 0;
+    uint32_t mutex_timeout_ = 0;
+    uint32_t driver_timeout_ = 0;
 
     volatile bool bus_off_ = false;
     volatile uint32_t rx_dropped_ = 0;
