@@ -3,3 +3,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Generated configuration for standalone diagnostic environments
+sdkconfig.bms-monitor
+sdkconfig.rc-monitor
