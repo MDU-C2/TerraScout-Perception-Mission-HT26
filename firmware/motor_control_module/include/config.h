@@ -51,7 +51,7 @@ inline constexpr uint8_t MOTOR_REAR_LEFT = 3;
 inline constexpr uint8_t MOTOR_REAR_RIGHT = 4;
 inline constexpr int     POLE_PAIRS = 21;
 inline constexpr int     GEAR_RATIO = 9;
-inline constexpr int32_t MAX_MOTOR_ERPM = 200;
+inline constexpr int32_t MAX_MOTOR_ERPM = 5000;
 // Manual command slew: zero to full speed takes one second.
 inline constexpr double MANUAL_RAMP_SECONDS = 1.0;
 inline constexpr double  TWO_PI = 6.28318530717958647692;
