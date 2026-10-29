@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "can.hpp"
+#include "bms_interface.hpp"
 #include "drive_control.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -18,6 +19,37 @@ namespace {
 constexpr char TAG[] = "MAIN";
 QueueHandle_t rc_input_queue = nullptr;
 QueueHandle_t nuc_input_queue = nullptr;
+struct BatteryInput { bool fresh = false; uint32_t faults = 0; int64_t received_us = 0; };
+QueueHandle_t battery_input_queue = nullptr;
+
+void battery_task(void *)
+{
+  if (config::BATTERY_CAN_TX_PIN < 0 || config::BATTERY_CAN_RX_PIN < 0) {
+    ESP_LOGE("BMS", "Battery CAN pins are not configured");
+    vTaskDelete(nullptr);
+    return;
+  }
+  Can can;
+  if (can.begin(config::BATTERY_CAN_TX_PIN, config::BATTERY_CAN_RX_PIN,
+                config::BATTERY_CAN_BITRATE, 64) != ESP_OK) {
+    ESP_LOGE("BMS", "Battery CAN initialization failed");
+    vTaskDelete(nullptr);
+    return;
+  }
+  BmsInterface bms(can);
+  while (true) {
+    Can::Frame frame;
+    if (can.receive(frame, 20) == ESP_OK) bms.processFrame(frame, esp_timer_get_time());
+    BatteryInput input;
+    input.fresh = bms.state(esp_timer_get_time()) == BmsInterface::State::Fresh;
+    if (const auto *status = bms.latest()) {
+      input.faults = status->fault_flags;
+      input.received_us = status->received_us;
+    }
+    xQueueOverwrite(battery_input_queue, &input);
+  }
+}
+
 void sbus_task(void *)
 {
   ESP_LOGI(
@@ -109,6 +141,7 @@ void control_task(void *)
   const uint8_t motor_ids[] = {config::MOTOR_FRONT_LEFT, config::MOTOR_REAR_LEFT,
                                config::MOTOR_FRONT_RIGHT, config::MOTOR_REAR_RIGHT};
   int64_t last_display_us = 0;
+  BatteryInput battery{};
   int64_t send_failure_started_us = 0;
   int64_t last_recovery_attempt_us = 0;
   TickType_t last_wake = xTaskGetTickCount();
@@ -137,7 +170,10 @@ void control_task(void *)
       motor_fault = motor_fault || motor_errors[i] != 0 || motor_received[i] == 0 ||
         check_us - motor_received[i] >= config::MOTOR_FEEDBACK_TIMEOUT_US;
     }
-    const bool battery_fault = false;
+    xQueueReceive(battery_input_queue, &battery, 0);
+    const bool battery_fault = config::BATTERY_CAN_ENABLED &&
+      (!battery.fresh || battery.faults != 0 || battery.received_us <= 0 ||
+       check_us < battery.received_us || check_us - battery.received_us >= 1000000);
     if (motor_fault || battery_fault) enable_gate.reset();
     mode = (motor_fault || battery_fault) ? DriveMode::DISABLED : enable_gate.update(controller);
     if (previous_mode != DriveMode::DISABLED && mode == DriveMode::DISABLED) {
@@ -273,8 +309,15 @@ extern "C" void app_main(void)
 {
   rc_input_queue = xQueueCreate(1, sizeof(ControllerInput));
   nuc_input_queue = xQueueCreate(1, sizeof(NucInput));
-  if (rc_input_queue == nullptr || nuc_input_queue == nullptr) {
+  battery_input_queue = xQueueCreate(1, sizeof(BatteryInput));
+  if (rc_input_queue == nullptr || nuc_input_queue == nullptr || battery_input_queue == nullptr) {
     ESP_LOGE(TAG, "Failed to create input queues");
+    return;
+  }
+
+  if (config::BATTERY_CAN_ENABLED &&
+      xTaskCreate(battery_task, "battery_task", 4096, nullptr, 4, nullptr) != pdPASS) {
+    ESP_LOGE(TAG, "Failed to create battery task");
     return;
   }
 
