@@ -1,6 +1,7 @@
 #include "bms.hpp"
 
 #include <cstring>
+#include "esp_timer.h"
 
 namespace {
 
@@ -40,9 +41,15 @@ uint16_t crc16_ccitt(const uint8_t *data, size_t size)
 
 bool TattuBmsDecoder::process(const Can::Frame &frame, BmsData &result)
 {
-    if (!frame.extended || frame.id != config::TATTU_BMS_CAN_ID || frame.dlc < 2) {
+    if (frame.id != config::TATTU_BMS_CAN_ID) {
         return false;
     }
+    if (!frame.extended || frame.rtr || frame.dlc < 2 || frame.dlc > 8) {
+        reset();
+        return false;
+    }
+    const int64_t now = esp_timer_get_time();
+    if (active_ && (now < started_us_ || now - started_us_ >= 100000)) reset();
 
     const uint8_t control = frame.data[frame.dlc - 1];
     const bool start = (control & 0x80) != 0;
@@ -51,12 +58,14 @@ bool TattuBmsDecoder::process(const Can::Frame &frame, BmsData &result)
     const uint8_t sequence = control & 0x1f;
 
     if (start) {
+        if (end || toggle != 0 || sequence != 0) { reset(); return false; }
         // The BMS uses the low five bits as a frame sequence number (0..7),
         // not as a constant transfer ID.
         sequence_ = sequence;
         expected_toggle_ = toggle;
         payload_size_ = 0;
         active_ = true;
+        started_us_ = now;
     }
 
     if (!active_) {
@@ -69,6 +78,10 @@ bool TattuBmsDecoder::process(const Can::Frame &frame, BmsData &result)
     }
 
     const size_t data_size = frame.dlc - 1;
+    if ((!end && frame.dlc != 8) || (end && frame.dlc != 2)) {
+        reset();
+        return false;
+    }
     if (payload_size_ + data_size > config::TATTU_BMS_PAYLOAD_SIZE) {
         payload_size_ = 0;
         active_ = false;

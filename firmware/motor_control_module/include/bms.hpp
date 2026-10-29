@@ -25,11 +25,13 @@ class TattuBmsDecoder {
 public:
     // Returns true only when a complete, CRC-valid BMS message was decoded.
     bool process(const Can::Frame &frame, BmsData &result);
+    void reset() { active_ = false; payload_size_ = 0; }
 
 private:
     uint8_t sequence_ = 0;
     uint8_t expected_toggle_ = 0;
     size_t payload_size_ = 0;
     bool active_ = false;
+    int64_t started_us_ = 0;
     uint8_t payload_[config::TATTU_BMS_PAYLOAD_SIZE] = {};
 };
