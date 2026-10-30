@@ -116,11 +116,11 @@ PC — sim-pc                              NUC — sim-nuc
 | Gazebo + robot spawning     |          | FAST-LIO2 + odom adapter   |
 | ROS–Gazebo Bridge           | --data-> | Ground segmentation        |
 | Simulation clock bridge     |          | STVL costmaps              |
-| Fleet Zenoh router :7447    | <-cmd-- | Nav2: Smac + MPPI          |
+| Fleet Zenoh router :7447    | <-cmd--- | Nav2: Smac + MPPI          |
 | Station services            |          | Mission services           |
 | Foxglove Desktop            |          | Foxglove Bridge            |
 +-----------------------------+          +----------------------------+
-                    Ethernet / Zenoh
+                            Ethernet / Zenoh
 ```
 
 The NUC's unit router connects to **`tcp/130.243.66.211:7447`**. There is **one central fleet router**, running on the PC; the NUC does not start another fleet router.
@@ -129,14 +129,14 @@ Foxglove Desktop runs on the PC and has successfully connected to the NUC's Foxg
 
 ## 4. Cross-host ROS 2 topic permissions
 
-| PC → NUC: simulated inputs | NUC → PC: commands / published robot status |
-|---|---|
-| `/clock` | `/terrascout1/cmd_vel` |
-| `/terrascout1/lidar_points_raw` | `/terrascout1/unit/description` |
-| `/terrascout1/microstrain/imu/data` | `/terrascout1/unit/health` |
-| `/terrascout1/navsat` | `/terrascout1/mission_state` |
-| `/terrascout1/joint_states` | `/terrascout1/fixposition/odometry_llh` |
-| `/terrascout1/odom_gt` | |
+| PC → NUC: simulated inputs          | NUC → PC: commands / published robot status |
+|                                     |                                             |
+| `/clock`                            | `/terrascout1/cmd_vel`                      |
+| `/terrascout1/lidar_points_raw`     | `/terrascout1/unit/description`             |
+| `/terrascout1/microstrain/imu/data` | `/terrascout1/unit/health`                  |
+| `/terrascout1/navsat`               | `/terrascout1/mission_state`                |
+| `/terrascout1/joint_states`         | `/terrascout1/fixposition/odometry_llh`     |
+| `/terrascout1/odom_gt`              |                                             |
 
 **Evidence level:** The topics above are *configured* as Zenoh boundary permissions. Actual receipt was directly demonstrated on the NUC for `/clock`, LiDAR, and IMU; the unique `NUC_ZENOH_TEST` velocity command was directly observed on the PC. `/navsat`, `/joint_states`, and `/odom_gt` appeared in the NUC ROS graph, but their individual message contents were not separately checked in the recorded tests. Other exported robot-status topics were not individually verified across the host boundary.
 

@@ -169,6 +169,18 @@
           plugin: nav2_costmap_2d::InflationLayer
         initial_transform_timeout: 30.0
         robot_base_frame: base_link
+        traversability_layer:
+          plugin: nav2_gridmap_traversability_layer::TraversabilityLayer
+          enabled: true
+          topic: /elevation_mapping_node/elevation_map
+          traversability_layer: traversability
+          # Experimental: soft terrain costs only
+          traversability_lethal: 0.0 # traversability values (which ranges [0,1]) below this is lethal (i.e., 254 cost)
+          traversability_free: 0.75  # Terrain with scores ≥ 0.75 receives zero terrain cost
+          traversability_gamma: 1.0  # Penalize poor terrain more strongly than moderately uneven terrain
+          max_cost: 150.0            # Limit terrain penalties to nonlethal Nav2 costs
+          invert_traversability: false
+          qos_reliability: reliable
         stvl_layer:
           plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer
           enabled: true
@@ -231,6 +243,7 @@
             voxel_min_points: 1
             clear_after_reading: true
         plugins:
+        - traversability_layer
         - stvl_layer
         - inflation_layer
         # Global planning map; keep below local update rate to limit CPU load.
@@ -254,6 +267,19 @@
           inflation_radius: 0.9
           plugin: nav2_costmap_2d::InflationLayer
         initial_transform_timeout: 30.0
+        traversability_layer:
+          plugin: nav2_gridmap_traversability_layer::TraversabilityLayer
+          enabled: true
+          # GridMap published by the Jetson
+          topic: /elevation_mapping_node/elevation_map
+          traversability_layer: traversability
+          # Experimental: soft terrain costs only
+          traversability_lethal: 0.05 # traversability values (which ranges [0,1]) below this is lethal (i.e., 254 cost)
+          traversability_free: 0.75  # Terrain with scores ≥ 0.75 receives zero terrain cost
+          traversability_gamma: 3.0  # Penalize poor terrain more strongly than moderately uneven terrain
+          max_cost: 150.0            # Limit terrain penalties to nonlethal Nav2 costs
+          invert_traversability: false
+          qos_reliability: reliable
         stvl_layer:
           plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer
           enabled: true
@@ -314,6 +340,7 @@
             voxel_min_points: 1
             clear_after_reading: true
         plugins:
+        - traversability_layer
         - stvl_layer
         - inflation_layer
         # Refresh the rolling obstacle map near the 10 Hz simulated LiDAR rate.
