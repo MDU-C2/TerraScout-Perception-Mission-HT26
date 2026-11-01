@@ -692,7 +692,8 @@ def mission_server(unit: UnitContext, after: list[str]) -> Process:
 
 
 def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
-    return [
+
+    processes = [
         node(
             YOLO_DETECTOR,
             package=PERCEPTION_PACKAGE,
@@ -704,6 +705,22 @@ def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
             ready=NodeProbe(f"/{unit.namespace}/{YOLO_DETECTOR}"),
         )
     ]
+
+    if unit.mode == SIMULATION:
+        processes.append(
+            node(
+                "enemy_reader",
+                package=SIMULATION_PACKAGE,
+                executable="enemy_reader.py",
+                node_name="enemy_reader",
+                namespace=unit.namespace,
+                after=[YOLO_DETECTOR],
+                ready=NodeProbe(f"/{unit.namespace}/enemy_reader"),
+                output="log",
+            )
+        )
+
+    return processes
 
 
 def processes(unit: UnitContext) -> list[Process]:

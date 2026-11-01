@@ -22,7 +22,8 @@ from object_tracker import ObjectTracker
 
 #This toggles if we use noise or not for the oak-D distance and odometry data
 #And it is specifically for noise generated in THIS file
-simulating = True
+ownOdomNoise = False
+ownPointCloudNoise = True
 
 #TODO, generate our own YOLO noise, misses and false positives?
 
@@ -93,7 +94,7 @@ class EnemyReader(Node):
         if not np.isfinite(quaternion).all() or np.linalg.norm(quaternion) < 0.5:
             return
 
-        if simulating:
+        if ownOdomNoise:
             x, y, z = np.random.normal(0, 0.05, size = 3) #TODO, this is just randomly chosen 5cm SD, adjust
 
         self.odom_history.append((
@@ -167,7 +168,7 @@ class EnemyReader(Node):
 
         position = np.median(filtered, axis=0)
 
-        if simulating:
+        if ownPointCloudNoise:
             position[0] += np.random.normal(0, 0.01 * position[0]**2)#mean, std, in meters
 
         return position, len(filtered)
