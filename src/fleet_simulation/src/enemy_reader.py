@@ -169,7 +169,15 @@ class EnemyReader(Node):
         position = np.median(filtered, axis=0)
 
         if ownPointCloudNoise:
-            position[0] += np.random.normal(0, 0.01 * position[0]**2)#mean, std, in meters
+            #In accordance (ish) to: https://github.com/luxonis/luxonis-isaac-sim/blob/main/README.md
+            #Get disparity, add noise to it, calculate position from new disparity
+            #Disparity is distance in pixels between the same object in the two cameras
+
+            f = 566       #Focal length (pixels)
+            B = 0.075     #Baseline (meters)
+            d = f * B / position[0]              #Distance -> disparity
+            d += np.random.normal(0.25, 0.20)    #Add disparity noise (pixels)
+            position[0] = f * B / d              #Disparity -> distance
 
         return position, len(filtered)
 
