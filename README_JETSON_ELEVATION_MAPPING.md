@@ -29,12 +29,12 @@ Ubuntu 24.04 PC                                      Jetson Orin Nano 4 GB
 TerraScout target: sim-elevation-pc                    Ubuntu 22.04 / JetPack 6.2.2
 
 Gazebo ── /terrascout1/lidar_points_raw ──┬─> FAST-LIO2 (raw cloud)
-                                         │
-                                         └─> lidar_filter.py
-                                                │
+                                          │
+                                          └─> lidar_filter.py
+                                                     │
                                      /terrascout1/lidar_points_filtered
-                                                │
-FAST-LIO2 / robot TF ── /terrascout1/tf[ _static ] ─┤
+                                                     │
+FAST-LIO2 / robot TF ── /terrascout1/tf[static] ---─-┤
 Simulation clock ─────────────────────── /clock ─────┤
                                                      │
 PC fleet Zenoh TCP router, 130.243.66.211:7447       │

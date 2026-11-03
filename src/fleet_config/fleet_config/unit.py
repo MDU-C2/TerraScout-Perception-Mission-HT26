@@ -195,12 +195,6 @@ def distributed_simulation_boundary(
                     None,
                     None,
                 ),
-                BoundaryEntry(
-                    f"/{namespace}/lidar_points_raw",
-                    "sensor_msgs/msg/PointCloud2",
-                    None,
-                    None,
-                ),
 
                 BoundaryEntry(
                     f"/{namespace}/lidar_points_filtered",
