@@ -85,7 +85,7 @@ class ObjectTracker:
         initial_std=0.5,
         measurement_std=0.20,
         process_std_per_sqrt_second=0.01,
-        chi2_gate_3d=11.345,   # 99% chi-square, 3 degrees of freedom
+        chi2_gate_3d= 7.815,   # 95% chi-square, 3 degrees of freedom
         max_physical_distance=2.0,
         confirmation_score=4.0,
         max_expected_misses=4,
@@ -108,27 +108,14 @@ class ObjectTracker:
         self.min_visible_distance = float(min_visible_distance)
         self.max_visible_distance = float(max_visible_distance)
         self.frame_margin = float(frame_margin)
-        self.new_track_cost = 7.0
-        self.missed_track_cost = 7.0
+        self.new_track_cost = 7.815
+        self.missed_track_cost = 7.815
 
     def confirmed_tracks(self):
         return [track for track in self.tracks if track.confirmed]
 
-    #TODO, see if this can be removed
     def _measurement_covariance(self, observation):
-        #If we have a covariance matrix use it, otherwise use the default one
-        if 'covariance' in observation:
-            matrix = np.asarray(observation['covariance'], dtype=float)
-        else:
-            matrix = np.eye(3) * self.measurement_std**2
-
-        #Error handling for matrix dimensions
-        if matrix.shape != (3, 3) or not np.isfinite(matrix).all():
-            raise ValueError('Observation covariance must be finite 3x3')
-
-        #making matrix symmetrical (basically *2/2), and adding tiny variance on diagonal
-        #to lower chance of singularity, which will cause error later
-        return (matrix + matrix.T) / 2 + np.eye(3) * 1e-8
+        return np.eye(3) * self.measurement_std**2
 
     #Make a list out of valid position observations
     def _normalise_observations(self, observations):
@@ -179,22 +166,8 @@ class ObjectTracker:
             return None
         cost = d2
 
-        #Pixel error in tracks projected object and real object observation
-        if projected is not None and 'bbox_center' in obs:
-            pixel_error = np.linalg.norm(
-                np.asarray(projected['uv']) - np.asarray(obs['bbox_center'])
-            )
-            #This is a heuristic to match the size of the mahalanobis cost with the pixel distance cost
-            #TODO, change/test/verify/remove/motivate
-            cost += min(2.0, (pixel_error / 45.0) ** 2)
-
-        #Making existing tracks more likely to match
-        if track.confirmed:
-            cost -= 1.0
-
         return cost
 
-    #Read
     def update(self, observations, timestamp, project=None, raw_detections=None):
 
         observations = self._normalise_observations(observations)   #Remove invalid observations
@@ -254,6 +227,7 @@ class ObjectTracker:
             #Go through all raw_detections
             #If it shares class and a box center close enough to the tracks projection
             #Consider the track to have been seen in the image
+            #TODO, 65 is a arbitrary parameter of max pixel distance
             if projection is not None:
                 for det in raw_detections:
                     if det['class_id'] == track.obj_class and np.linalg.norm(

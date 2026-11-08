@@ -62,7 +62,7 @@ class EnemyReader(Node):
         )
 
         self.sync = ApproximateTimeSynchronizer(
-            [self.detection_sub, self.cloud_sub], queue_size=10, slop=0.1,
+            [self.detection_sub, self.cloud_sub], queue_size=10, slop=0.1, #slop 0.1 means that they can be at most 0.1 seconds away from eachother
         )
 
         self.odom_sub = self.create_subscription(
@@ -154,6 +154,30 @@ class EnemyReader(Node):
         valid = object_points[np.isfinite(object_points).all(axis=2)]
         valid = valid[valid[:, 0] > 0.0]
 
+        if len(valid) == 0:
+            return None, 0
+
+        #TODO refine this more
+        if ownPointCloudNoise:
+            #In accordance (ish) to: https://github.com/luxonis/luxonis-isaac-sim/blob/main/README.md
+            #Get disparity, add noise to it, calculate position from new disparity
+            #Disparity is distance in pixels between the same object in the two cameras
+
+            f = 805       # Focal length (pixels)
+            B = 0.075     # Baseline (meters)
+        
+            d = f * B / valid[:, 0]
+            d += np.random.normal(0, 0.20, size=len(valid))
+        
+            mask = np.isfinite(d) & (d > 0)
+            valid = valid[mask]
+            d = d[mask]
+        
+            if len(valid) == 0:
+                return None, 0
+        
+            valid[:, 0] = f * B / d
+
         #X is depth
         depths = valid[:, 0]
 
@@ -167,35 +191,29 @@ class EnemyReader(Node):
             return None, len(filtered)
 
         position = np.median(filtered, axis=0)
-
-        if ownPointCloudNoise:
-            #In accordance (ish) to: https://github.com/luxonis/luxonis-isaac-sim/blob/main/README.md
-            #Get disparity, add noise to it, calculate position from new disparity
-            #Disparity is distance in pixels between the same object in the two cameras
-
-            f = 566       #Focal length (pixels)
-            B = 0.075     #Baseline (meters)
-            d = f * B / position[0]              #Distance -> disparity
-            d += np.random.normal(0.25, 0.20)    #Add disparity noise (pixels)
-            position[0] = f * B / d              #Disparity -> distance
-
+        
         return position, len(filtered)
 
+    #Not used
     #Cameras depth uncertainty increases with the distance to the target
-    #TODO, modify according to the datasheet!
     def measurement_covariance(self, depth, R_world_robot):
         d = max(0.2, float(depth))
 
-        #TODO, UNMOTIVATED
-        std_depth = 0.15 + 0.010 * d**2
+        f = 805
+        B = 0.075
+        sigma_disparity = 0.20
+
+        std_depth = (d**2 / (f * B)) * sigma_disparity
+
         std_side = np.hypot(0.15 + 0.020 * d, 0.030 * d)
         std_up = np.hypot(0.12 + 0.015 * d, 0.020 * d)
-        #Hypotenuse
 
-        #Diagonal covariance matrix
-        R_camera = np.diag([std_depth**2, std_side**2, std_up**2])
+        R_camera = np.diag([
+            std_depth**2,
+            std_side**2,
+            std_up**2
+        ])
 
-        #Transform to global coordinates and return
         return R_world_robot @ R_camera @ R_world_robot.T + np.eye(3) * 0.08**2
 
     #Nested function, the inner project() will be sent to object_tracker
@@ -319,7 +337,6 @@ class EnemyReader(Node):
             observations.append({
                 'class_id': obj_class,
                 'position': global_position,
-                'covariance': self.measurement_covariance(position[0], R_world_robot),
                 'bbox_center': np.array([cx, cy], dtype=float),
                 'yolo_confidence': yolo_confidence,
             })
