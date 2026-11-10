@@ -150,6 +150,67 @@ def robot_exports(namespace: str, robot_class: RobotClass) -> tuple[BoundaryEntr
     )
 
 
+def distributed_simulation_boundary(
+    namespace: str,
+    robot_class: RobotClass,
+    deployment: str,
+) -> Boundary:
+    """ROS 2 topics exchanged between the simulation PC and Jetson."""
+
+    if deployment == "elevation-pc":
+        return Boundary(
+            exports=(
+                *robot_exports(namespace, robot_class),
+
+                # Simulation clock
+                BoundaryEntry(
+                    "/clock",
+                    CLOCK_TYPE,
+                    None,
+                    None,
+                ),
+
+                # Filtered LiDAR for Jetson elevation mapping
+                BoundaryEntry(
+                    f"/{namespace}/lidar_points_filtered",
+                    "sensor_msgs/msg/PointCloud2",
+                    None,
+                    None,
+                ),
+
+                # Robot transformations for elevation mapping
+                BoundaryEntry(
+                    f"/{namespace}/tf",
+                    "tf2_msgs/msg/TFMessage",
+                    None,
+                    None,
+                ),
+                BoundaryEntry(
+                    f"/{namespace}/tf_static",
+                    "tf2_msgs/msg/TFMessage",
+                    None,
+                    None,
+                ),
+            ),
+
+            imports=(
+                # Elevation GridMap produced by the Jetson
+                BoundaryEntry(
+                    "/elevation_mapping_node/elevation_map",
+                    "grid_map_msgs/msg/GridMap",
+                    None,
+                    None,
+                ),
+            ),
+        )
+
+    return Boundary(
+        exports=robot_exports(namespace, robot_class),
+    )
+
+
+
+
 def world_boundary() -> Boundary:
     return Boundary()
 

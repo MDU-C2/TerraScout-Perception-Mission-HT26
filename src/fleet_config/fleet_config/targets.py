@@ -13,6 +13,7 @@ from fleet_config.model import (
     SourceFile,
     StationTarget,
     Target,
+    Topology,
     World,
 )
 from pathlib import Path
@@ -44,4 +45,7 @@ TARGETS: dict[str, Target] = {
     "sim-record": replace(SIM, features=Features(recording_enabled=True)),
     "sim-madum": replace(SIM, features=Features(recording_enabled=True, madum_enabled=True)),
     "station": StationTarget(robots=(("terrascout1", TERRASCOUT),)),
+    # Change the uplink_address to the IP address of the PC sending LiDAR data to Jetson (i.e., check "ip -4 addr show eno1" on the PC and use the address of the eno1 interface)
+    "sim-elevation-pc": replace(SIM,deployment="elevation-pc",topology=Topology(uplink_address="130.243.66.211",uplink_interface="eno1",),),
+
 }
