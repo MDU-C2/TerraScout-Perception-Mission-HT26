@@ -25,6 +25,8 @@ from object_tracker import ObjectTracker
 ownOdomNoise = False
 ownPointCloudNoise = True
 
+enemyClass = 'stop-sign'
+
 #TODO, generate our own YOLO noise, misses and false positives?
 
 class EnemyReader(Node):
@@ -148,12 +150,13 @@ class EnemyReader(Node):
 
         return p, Rotation.from_quat(q).as_matrix(), age <= 0.20
 
+    #Noise added in here!
     def get_position_from_point_cloud(self, object_points):
 
         #Ensure x, y, z are finite and x is positve
         valid = object_points[np.isfinite(object_points).all(axis=2)]
         valid = valid[valid[:, 0] > 0.0]
-
+ 
         if len(valid) == 0:
             return None, 0
 
@@ -163,20 +166,20 @@ class EnemyReader(Node):
             #Get disparity, add noise to it, calculate position from new disparity
             #Disparity is distance in pixels between the same object in the two cameras
 
-            f = 805       # Focal length (pixels)
-            B = 0.075     # Baseline (meters)
+            f = 805       #Distance between lens and sensor, calibrated to pixels
+            B = 0.075     #Distance between the cameras in meters
         
-            d = f * B / valid[:, 0]
-            d += np.random.normal(0, 0.20, size=len(valid))
+            disparities = f * B / valid[:, 0]
+            disparities += np.random.normal(0, 0.20, size=len(valid))
         
-            mask = np.isfinite(d) & (d > 0)
+            mask = (disparities > 0)
             valid = valid[mask]
-            d = d[mask]
+            disparities = disparities[mask]
         
             if len(valid) == 0:
                 return None, 0
         
-            valid[:, 0] = f * B / d
+            valid[:, 0] = f * B / disparities
 
         #X is depth
         depths = valid[:, 0]
@@ -361,11 +364,13 @@ class EnemyReader(Node):
         #Publish to Navigation
         enemies_msg = EnemyArray()
         for track in confirmed_tracks:
-            enemy = Enemy()
-            enemy.id = int(track.id)
-            enemy.x = float(track.position[0])
-            enemy.y = float(track.position[1])
-            enemies_msg.enemies.append(enemy)
+            if track.obj_class == enemyClass:
+                enemy = Enemy()
+                enemy.id = int(track.id)
+                enemy.x = float(track.position[0])
+                enemy.y = float(track.position[1])
+                enemies_msg.enemies.append(enemy)
+
 
         self.enemies_pub.publish(enemies_msg)
 
