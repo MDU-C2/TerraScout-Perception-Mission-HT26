@@ -259,10 +259,10 @@ def summarize_initial_ordering(metadata, requested, selected):
         if match_index is not None:
             selected_names.append(str(unused.pop(match_index).get("name", f"WP{len(selected_names) + 1}")))
     if mode == "unordered":
-        algorithm = "exhaustive shortest closed tour using straight-line geographic distances"
+        algorithm = "multi-start nearest-neighbor with 2-opt using straight-line geographic distances"
         reason = (
-            "At submission, evaluate every waypoint permutation by straight-line distance "
-            "from the robot start through the destinations and back to mission start. "
+            "At submission, compare nearest-neighbor routes from every possible first "
+            "waypoint, then improve them with 2-opt, including the return leg. "
             "This is not Nav2 planned-path length or obstacle-aware reachability."
         )
     elif mode == "ordered":

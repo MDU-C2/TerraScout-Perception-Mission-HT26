@@ -59,7 +59,7 @@
       - pointcloud
       pointcloud:
         # Match the segmentation obstacle band relative to base_footprint.
-        max_height: 1.05
+        max_height: 0.9
         min_height: 0.1
         source_timeout: 0.3
         topic: obstacle_points

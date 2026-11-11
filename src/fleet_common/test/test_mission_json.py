@@ -90,6 +90,15 @@ def test_unordered_can_reject_nearest_neighbor_for_shorter_global_tour():
     )
 
 
+def test_unordered_handles_twenty_waypoints_and_keeps_each_waypoint_once():
+    coords = [(47.0 + index * 0.001, 8.0 + (index % 5) * 0.001, 10.0) for index in range(20)]
+
+    ordered = order_waypoints(coords, mode="unordered", home=(47.0, 8.0))
+
+    assert len(ordered) == 20
+    assert sorted(ordered) == sorted(coords)
+
+
 def test_ordered_keeps_user_waypoint_order():
     coords = [
         (47.0, 8.0, 10.0),

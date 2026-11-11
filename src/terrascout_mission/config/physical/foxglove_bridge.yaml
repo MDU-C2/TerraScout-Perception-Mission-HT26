@@ -6,6 +6,7 @@
     send_buffer_limit: 1000000
     max_qos_depth: 5
     topic_whitelist:
+    - ^/clock$
     - ^/rosout$
     - ^/<robot_namespace>/battery_state$
     - ^/<robot_namespace>/clicked_point$
@@ -20,6 +21,11 @@
     - ^/<robot_namespace>/fixposition/datum$
     - ^/<robot_namespace>/fixposition/odometry_enu$
     - ^/<robot_namespace>/fixposition/odometry_llh$
+    - ^/<robot_namespace>/fixposition/odometry_smooth$
+    - ^/<robot_namespace>/fixposition/speed$
+    - ^/<robot_namespace>/fast_lio/cloud_registered$
+    - ^/<robot_namespace>/fast_lio/odometry$
+    - ^/<robot_namespace>/fast_lio/path$
     - ^/<robot_namespace>/front_camera/camera_info$
     - ^/<robot_namespace>/front_camera/image$
     - ^/<robot_namespace>/global_costmap/costmap$
@@ -31,39 +37,52 @@
     - ^/<robot_namespace>/joy$
     - ^/<robot_namespace>/lidar_imu$
     - ^/<robot_namespace>/lidar_points_filtered$
+    - ^/<robot_namespace>/lidar_points_raw$
     - ^/<robot_namespace>/local_costmap/costmap$
     - ^/<robot_namespace>/map$
     - ^/<robot_namespace>/map_metadata$
     - ^/<robot_namespace>/microstrain/imu/data$
     - ^/<robot_namespace>/microstrain/imu/mag$
+    - ^/<robot_namespace>/navsat$
     - ^/<robot_namespace>/obstacle_points$
     - ^/<robot_namespace>/keepout_obstacle_points$
     - ^/<robot_namespace>/keepout_zone_marker$
     - ^/<robot_namespace>/mission_waypoint_markers$
     - ^/<robot_namespace>/odom$
+    - ^/<robot_namespace>/odom_gt$
     - ^/<robot_namespace>/polygon_stop$
     - ^/<robot_namespace>/polygon_slowdown$
     - ^/<robot_namespace>/plan$
     - ^/<robot_namespace>/platform/safety_stop$
+    - ^/<robot_namespace>/raw_points$
     - ^/<robot_namespace>/robot_description$
     - ^/<robot_namespace>/teleop_takeover$
     - ^/<robot_namespace>/tf$
     - ^/<robot_namespace>/tf_static$
     - ^/<robot_namespace>/trajectories$
     - ^/<robot_namespace>/waypoints_geo$
+    - ^/<robot_namespace>/front_depth/camera_info$
+    - ^/<robot_namespace>/front_depth/image$
+    - ^/<robot_namespace>/front_depth/points$
     best_effort_qos_topic_whitelist:
     - ^/<robot_namespace>/fixposition/odometry_enu$
     - ^/<robot_namespace>/fixposition/odometry_llh$
+    - ^/<robot_namespace>/fixposition/odometry_smooth$
     - ^/<robot_namespace>/front_camera/image$
     - ^/<robot_namespace>/ground_points$
     - ^/<robot_namespace>/imu$
     - ^/<robot_namespace>/lidar_imu$
     - ^/<robot_namespace>/lidar_points_filtered$
+    - ^/<robot_namespace>/lidar_points_raw$
     - ^/<robot_namespace>/microstrain/imu/data$
     - ^/<robot_namespace>/microstrain/imu/mag$
+    - ^/<robot_namespace>/navsat$
     - ^/<robot_namespace>/obstacle_points$
     - ^/<robot_namespace>/keepout_obstacle_points$
     - ^/<robot_namespace>/keepout_zone_marker$
+    - ^/<robot_namespace>/raw_points$
+    - ^/<robot_namespace>/front_depth/image$
+    - ^/<robot_namespace>/front_depth/points$
     client_topic_whitelist:
     - ^/<robot_namespace>/clicked_point$
     - ^/<robot_namespace>/cmd_vel_teleop$

@@ -80,19 +80,59 @@ def order_waypoints(
 ) -> list[tuple[float, float, float]]:
     if mode != "unordered" or len(coords) < 2:
         return coords
-    # The mission size is deliberately small (four destinations), so evaluate
-    # every ordering instead of choosing the locally nearest next waypoint.
-    # Score the complete closed route, including the return to mission start.
+    # Try every possible first waypoint, then improve each nearest-neighbor
+    # route with 2-opt. This avoids the factorial cost of all permutations.
     terminal = return_home or home
+    home_point = (home[0], home[1])
+    terminal_point = (terminal[0], terminal[1])
 
-    def route_length(route):
-        points = [(home[0], home[1]), *[(wp[0], wp[1]) for wp in route], terminal]
-        return sum(
-            math.sqrt(_distance_sq_m(a[0], a[1], b[0], b[1]))
-            for a, b in itertools.pairwise(points)
+    def distance(a: tuple[float, float], b: tuple[float, float]) -> float:
+        return math.sqrt(_distance_sq_m(a[0], a[1], b[0], b[1]))
+
+    points = [(wp[0], wp[1]) for wp in coords]
+    distances = [[distance(a, b) for b in points] for a in points]
+    start_distances = [distance(home_point, point) for point in points]
+    end_distances = [distance(point, terminal_point) for point in points]
+
+    def route_length(route: list[int]) -> float:
+        return (
+            start_distances[route[0]]
+            + sum(distances[a][b] for a, b in itertools.pairwise(route))
+            + end_distances[route[-1]]
         )
 
-    return list(min(itertools.permutations(coords), key=route_length))
+    best_route: list[int] | None = None
+    best_length = math.inf
+    for first in range(len(coords)):
+        remaining = set(range(len(coords)))
+        remaining.remove(first)
+        route = [first]
+        while remaining:
+            current = route[-1]
+            next_point = min(remaining, key=lambda index: (distances[current][index], index))
+            route.append(next_point)
+            remaining.remove(next_point)
+
+        # Reverse segments that shorten the complete route, keeping its
+        # home and terminal points fixed.
+        improved = True
+        while improved:
+            improved = False
+            current_length = route_length(route)
+            for left in range(len(route) - 1):
+                for right in range(left + 1, len(route)):
+                    candidate = route[:left] + route[left:right + 1][::-1] + route[right + 1:]
+                    candidate_length = route_length(candidate)
+                    if candidate_length < current_length - 1e-9:
+                        route = candidate
+                        current_length = candidate_length
+                        improved = True
+            length = route_length(route)
+            if length < best_length:
+                best_route, best_length = route, length
+
+    assert best_route is not None
+    return [coords[index] for index in best_route]
 def _distance_sq_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     meters_per_deg_lat = 111_320.0
     mean_lat_rad = math.radians((lat1 + lat2) * 0.5)
@@ -280,7 +320,7 @@ def main() -> int:
         if args.routing_mode == "unordered":
             print("ordering decision:")
             print(f"  mode: unordered")
-            print("  algorithm: exhaustive shortest closed tour using straight-line distances")
+            print("  algorithm: multi-start nearest-neighbor with 2-opt using straight-line distances")
             print("  requested waypoints: " + json.dumps([
                 {"latitude": lat, "longitude": lon} for lat, lon, _ in requested_coords
             ]))
@@ -288,9 +328,9 @@ def main() -> int:
                 {"latitude": lat, "longitude": lon} for lat, lon, _ in coords
             ]))
             print(
-                "  selection reason: evaluated each waypoint permutation from the robot's "
-                "start through all destinations and back to mission start; this does not "
-                "use Nav2 planned-path lengths or obstacle-aware reachability"
+                "  selection reason: compared nearest-neighbor routes from every possible "
+                "first waypoint and improved them with 2-opt, including the return leg; "
+                "this does not use Nav2 planned-path lengths or obstacle-aware reachability"
             )
         plan = MissionPlan()
         plan.id = args.mission_id

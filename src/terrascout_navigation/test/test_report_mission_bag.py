@@ -155,7 +155,7 @@ def test_initial_unordered_decision_reports_requested_and_selected_route():
     ]
     decision = summarize_initial_ordering(metadata, requested, selected)
     assert decision["ordering_algorithm"] == (
-        "exhaustive shortest closed tour using straight-line geographic distances"
+        "multi-start nearest-neighbor with 2-opt using straight-line geographic distances"
     )
     assert "not Nav2 planned-path length" in decision["selection_reason"]
     assert decision["requested_waypoints"] == ["WP1", "WP2"]

@@ -872,7 +872,7 @@ class GroundMissionServer(Node):
             if new_order != previous_order:
                 mission.order_change_reason = (
                     "Operator-added waypoint inserted; remaining destinations reordered "
-                    "using the nearest-distance heuristic."
+                    "using multi-start nearest-neighbor with 2-opt."
                     if mode == "unordered"
                     else "Operator-added waypoint inserted into the ordered mission."
                 )
