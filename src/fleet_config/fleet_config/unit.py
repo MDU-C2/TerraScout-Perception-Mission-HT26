@@ -269,7 +269,7 @@ def contexts(
                 instance=instance,
                 mode=robot.mode,
                 use_sim_time=robot.use_sim_time,
-                boundary=Boundary(exports=robot_exports(robot.id, robot.robot_class)),
+                boundary=distributed_simulation_boundary(robot.id,robot.robot_class,fleet.deployment),
                 robot=robot,
                 topology=robot.topology,
                 simulation=robot.simulation,
