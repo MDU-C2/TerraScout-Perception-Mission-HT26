@@ -27,6 +27,8 @@ ownPointCloudNoise = True
 
 enemyClass = 'stop-sign'
 
+camera_offset = np.array([0.36, 0.0, 0.55])
+
 #TODO, generate our own YOLO noise, misses and false positives?
 
 class EnemyReader(Node):
@@ -37,14 +39,11 @@ class EnemyReader(Node):
         self.mad_multiplier = 3.5
         self.min_depth_tolerance = 0.05
         self.min_valid_points = 10
-
-        self.camera_offset = np.array([0.36, 0.0, 0.55])
-        self.tracker = ObjectTracker(min_observations=5)
+        
+        self.tracker = ObjectTracker()
         self.odom_history = deque(maxlen=150)
         self.camera_model = None
         self.camera_info_size = None
-        self._warned_camera_info = False
-        self._warned_odom = False
 
         self.detection_sub = Subscriber(
             self, Detection2DArray, '/terrascout1/oakd/detections_2d',
@@ -158,7 +157,7 @@ class EnemyReader(Node):
         valid = valid[valid[:, 0] > 0.0]
  
         if len(valid) == 0:
-            return None, 0
+            return None
 
         #TODO refine this more
         if ownPointCloudNoise:
@@ -177,7 +176,7 @@ class EnemyReader(Node):
             disparities = disparities[mask]
         
             if len(valid) == 0:
-                return None, 0
+                return None
         
             valid[:, 0] = f * B / disparities
 
@@ -191,11 +190,11 @@ class EnemyReader(Node):
         filtered = valid[np.abs(depths - median_depth) <= tolerance]
 
         if len(filtered) < self.min_valid_points:
-            return None, len(filtered)
+            return None
 
         position = np.median(filtered, axis=0)
         
-        return position, len(filtered)
+        return position
 
     #Not used
     #Cameras depth uncertainty increases with the distance to the target
@@ -224,7 +223,7 @@ class EnemyReader(Node):
     def projector(self, robot_position, R_world_robot, width, height):
 
         #position (@ is matrix multiplication)
-        camera_pos = robot_position + R_world_robot @ self.camera_offset
+        camera_pos = robot_position + R_world_robot @ camera_offset
 
         camera_rot = R_world_robot.T
 
@@ -249,40 +248,17 @@ class EnemyReader(Node):
         return project
 
     #Updates estimate and publishes it
+    #Called when a point cloud and YOLO pair is read, at most 0.1 s apart 
     def sensor_callback(self, detections_msg, cloud_msg):
-
-        #Error handling
-        if detections_msg.header.frame_id != cloud_msg.header.frame_id:
-            self.get_logger().warn('Detection and point cloud frames do not match')
-            return
-        if cloud_msg.height != 720 or cloud_msg.width != 1280:
-            self.get_logger().warn('Unexpected point cloud dimensions')
-            return
 
         #Get time
         timestamp = self.message_time(cloud_msg.header.stamp)
 
-        #Error handling
+        #Find pose in odom history matching time stamp
         pose = self.pose_for_timestamp(timestamp)
         if pose is None:
-            if not self._warned_odom:
-                self.get_logger().warn('No odometry within 0.30 s of cloud: skipping frame')
-                self._warned_odom = True
             return
-        
-        #get robot transform
         p_robot, R_world_robot, pose_fresh = pose
-
-        #Error handling
-        if not pose_fresh and not self._warned_odom:
-            self.get_logger().warn('No time-aligned odometry: visibility penalties disabled')
-            self._warned_odom = True
-        if self.camera_model is None and not self._warned_camera_info:
-            self.get_logger().warn('Waiting for RGB CameraInfo: visibility penalties disabled')
-            self._warned_camera_info = True
-
-        observations = []
-        raw_detections = []
 
         #Get pointcloud as 3D matrix
         points = point_cloud2.read_points_numpy(
@@ -291,6 +267,8 @@ class EnemyReader(Node):
             skip_nans=False,
         ).reshape(cloud_msg.height, cloud_msg.width, 3)
 
+        observations = [] #What we will send to object_tracker
+        image_observation = [] #The yolo observations with insufficient depth information
 
         #Loop through all YOLO detections
         #To save the objects global positions 
@@ -306,8 +284,7 @@ class EnemyReader(Node):
             yolo_confidence = detection.results[0].hypothesis.score
             cx, cy = detection.bbox.center.position.x, detection.bbox.center.position.y
 
-            #Save YOLO observation, will be used in object_tracker
-            raw_detections.append({
+            image_observation.append({
                 'class_id': obj_class,
                 'bbox_center': np.array([cx, cy], dtype=float),
             })
@@ -324,17 +301,16 @@ class EnemyReader(Node):
                 continue
 
             #Object position and the number of points in the cloud sub space associated with it
-            position, retained_points = self.get_position_from_point_cloud(points[y1:y2, x1:x2])
+            position = self.get_position_from_point_cloud(points[y1:y2, x1:x2])
 
             #The only way the above function returns none is if we don't have enough valid points
             if position is None:
                 self.get_logger().warn(
                     f'Not enough valid depth points for {obj_class} '
-                    f'after MAD filtering ({retained_points})'
                 )
                 continue
 
-            global_position = p_robot + R_world_robot @ (position + self.camera_offset)
+            global_position = p_robot + R_world_robot @ (position + camera_offset)
 
             #Save object observation
             observations.append({
@@ -352,7 +328,7 @@ class EnemyReader(Node):
         #Call the Kalman filter on each track
         #As well was the data association
         tracks = self.tracker.update(
-            observations, timestamp, project=project, raw_detections=raw_detections
+            observations, timestamp, project=project, image_observation=image_observation
         )
 
         #For logging and ROS2 topic publishing

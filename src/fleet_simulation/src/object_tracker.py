@@ -168,10 +168,10 @@ class ObjectTracker:
 
         return cost
 
-    def update(self, observations, timestamp, project=None, raw_detections=None):
+    def update(self, observations, timestamp, project=None, image_observation=None):
 
         observations = self._normalise_observations(observations)   #Remove invalid observations
-        raw_detections = raw_detections or []
+        image_observation = image_observation or []
         timestamp = float(timestamp)
 
         #Predict position of each tracks object
@@ -224,14 +224,14 @@ class ObjectTracker:
             seen_in_image = False
             projection = projections[i]
 
-            #Go through all raw_detections
+            #Go through all image_observations, they are yolo detections with insufficient depth points
             #If it shares class and a box center close enough to the tracks projection
             #Consider the track to have been seen in the image
             #TODO, 65 is a arbitrary parameter of max pixel distance
             if projection is not None:
-                for det in raw_detections:
-                    if det['class_id'] == track.obj_class and np.linalg.norm(
-                        np.asarray(det['bbox_center']) - np.asarray(projection['uv'])
+                for i_o in image_observation:
+                    if i_o['class_id'] == track.obj_class and np.linalg.norm(
+                        np.asarray(i_o['bbox_center']) - np.asarray(projection['uv'])
                         ) <= 65.0:
                         seen_in_image = True
                         break
