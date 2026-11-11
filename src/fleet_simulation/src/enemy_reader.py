@@ -2,13 +2,13 @@
 """YOLO + organized depth -> ENU static-object tracks with visibility evidence."""
 
 from collections import deque
-from fleet_interfaces.msg import Enemy, EnemyArray
+from fleet_interfaces.msg import Enemy, EnemyArray, TrackedObject, TrackedObjectArray
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import PointCloud2, CameraInfo
+from sensor_msgs.msg import PointCloud2, CameraInfo, Image
 from sensor_msgs_py import point_cloud2
 from vision_msgs.msg import Detection2DArray
 from message_filters import Subscriber, ApproximateTimeSynchronizer
@@ -42,6 +42,7 @@ class EnemyReader(Node):
         
         self.tracker = ObjectTracker()
         self.odom_history = deque(maxlen=150)
+        self.image_history = deque(maxlen=10)
         self.camera_model = None
         self.camera_info_size = None
 
@@ -54,6 +55,13 @@ class EnemyReader(Node):
         self.enemies_pub = self.create_publisher(
             EnemyArray,
             '/terrascout1/enemies',
+            10
+        )
+
+        #Publish tracked objects to operator
+        self.objects_pub = self.create_publisher(
+            TrackedObjectArray,
+            '/terrascout1/tracked_objects',
             10
         )
 
@@ -74,6 +82,13 @@ class EnemyReader(Node):
         self.camera_info_sub = self.create_subscription(
             CameraInfo, '/terrascout1/oakd/rgb/camera_info',
             self.camera_info_callback, qos_profile_sensor_data,
+        )
+
+        self.image_sub = self.create_subscription(
+            Image,
+            '/terrascout1/oakd/rgb/image_raw',
+            self.image_callback,
+            qos_profile_sensor_data,
         )
 
         self.sync.registerCallback(self.sensor_callback)
@@ -103,6 +118,10 @@ class EnemyReader(Node):
             np.array([p.x, p.y, p.z], dtype=float),
             quaternion,
         ))
+
+    def image_callback(self, msg):
+        timestamp = self.message_time(msg.header.stamp)
+        self.image_history.append((timestamp, msg))
 
     #Get camera width, height and model
     def camera_info_callback(self, msg):
@@ -267,6 +286,21 @@ class EnemyReader(Node):
             skip_nans=False,
         ).reshape(cloud_msg.height, cloud_msg.width, 3)
 
+        #get image seen by YOLO
+        detection_time = self.message_time(detections_msg.header.stamp)
+
+        image_entry = min(
+            self.image_history,
+            key=lambda item: abs(item[0] - detection_time),
+            default=None
+            )
+
+        image_msg = None
+
+        if image_entry is not None:
+            if abs(image_entry[0] - detection_time) <= 0.001:
+                image_msg = image_entry[1]
+
         observations = [] #What we will send to object_tracker
         image_observation = [] #The yolo observations with insufficient depth information
 
@@ -318,6 +352,8 @@ class EnemyReader(Node):
                 'position': global_position,
                 'bbox_center': np.array([cx, cy], dtype=float),
                 'yolo_confidence': yolo_confidence,
+                'image': image_msg,
+                'bbox' : (x1, y1, x2, y2)
             })
 
         #Create a function that goes from expected 3D object center to 2D camera image center
@@ -349,6 +385,32 @@ class EnemyReader(Node):
 
 
         self.enemies_pub.publish(enemies_msg)
+
+        #TODO, everything below needs to be inspected
+        objects_msg = TrackedObjectArray()
+        objects_msg.header.stamp = cloud_msg.header.stamp
+        objects_msg.header.frame_id = 'enu'
+
+        for track in tracks:
+            obj = TrackedObject()
+
+            obj.id = int(track.id)
+            
+            # Image
+            if track.image is not None:
+                image = track.image
+
+                obj.image.header.stamp = obj.last_seen
+                obj.image.encoding = 'rgb8'
+                obj.image.height = image.shape[0]
+                obj.image.width = image.shape[1]
+                obj.image.step = image.shape[1] * 3
+                obj.image.is_bigendian = 0
+                obj.image.data = image.tobytes()
+
+            objects_msg.objects.append(obj)
+
+        self.objects_pub.publish(objects_msg)
 
         #Log
         for track in confirmed_tracks:

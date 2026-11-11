@@ -22,6 +22,8 @@ class ObjectTrack:
         self.expected_misses = 0
         self.last_visibility_check = float(timestamp)
 
+        self.image = None
+
         #Kalman Parameters
         self.kf = KalmanFilter(dim_x=3, dim_z=3)
         self.kf.x = np.asarray(observation['position'], dtype=float).reshape(3, 1)
@@ -65,7 +67,10 @@ class ObjectTrack:
         self.expected_misses = 0
         self.existence_score = min(12.0, self.existence_score + 1.0)
 
+        #TODO, image == None is dealt with in self.save image, but then we get no image since it is only called once per track
         if (self.observations >= self.min_observations and self.existence_score >= self.confirmation_score):
+            if self.confirmed == False:
+                self.save_image(observation)
             self.confirmed = True
 
     #Called when we SHOULD have seen something but didn't
@@ -73,6 +78,26 @@ class ObjectTrack:
         self.last_visibility_check = float(timestamp) #Used to determine if this function should be called
         self.expected_misses += 1
         self.existence_score = max(-12.0, self.existence_score - 1.0)
+
+    #Sets self.image to cropped version of the observed image
+    def save_image(self, observation):
+        image_msg = observation.get('image')
+
+        if image_msg is None:
+            return
+
+        x1, y1, x2, y2 = observation['bbox']
+
+        image = np.frombuffer(
+            image_msg.data,
+            dtype=np.uint8
+        ).reshape(image_msg.height, image_msg.step)
+
+        image = image[:, :image_msg.width * 3].reshape(
+            image_msg.height, image_msg.width, 3
+        )
+
+        self.image = image[y1:y2, x1:x2].copy()
 
 #This is for all the objects
 class ObjectTracker:
