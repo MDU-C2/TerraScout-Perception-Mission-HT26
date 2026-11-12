@@ -2,7 +2,7 @@
   ros__parameters:
     use_imu_orientation: true
     robot_frame: base_link
-    lidar_to_ground: -0.53
+    lidar_to_ground: -0.90
     transform_tolerance: 0.3
     cellSizeX: 1.0
     cellSizeY: 1.0

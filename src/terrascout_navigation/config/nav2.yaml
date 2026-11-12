@@ -118,7 +118,7 @@
     global_costmap:
       ros__parameters:
         always_send_full_costmap: true
-        footprint: '[[0.465, 0.35], [0.465, -0.35], [-0.465, -0.35], [-0.465, 0.35]]'
+        footprint: '[[0.465, 0.485], [0.465, -0.485], [-0.465, -0.485], [-0.465, 0.485]]'
         footprint_padding: 0.01
         height: 100
         inflation_layer:
@@ -158,7 +158,7 @@
     local_costmap:
       ros__parameters:
         always_send_full_costmap: true
-        footprint: '[[0.465, 0.35], [0.465, -0.35], [-0.465, -0.35], [-0.465, 0.35]]'
+        footprint: '[[0.465, 0.485], [0.465, -0.485], [-0.465, -0.485], [-0.465, 0.485]]'
         footprint_padding: 0.01
         global_frame: odom
         height: 20

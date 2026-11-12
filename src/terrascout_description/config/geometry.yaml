@@ -1,16 +1,16 @@
-base_height: 0.33
+base_height: 0.33 # Midle point of central chassi 0.34
 outline:
   length: 0.93
-  width: 0.699
+  width: 0.97
 body:
-  length: 0.6
-  width: 0.69
+  length: 0.6 # Length of what?
+  width: 0.96
   height: 0.25
 wheel:
   radius: 0.175
   width: 0.145
   x: 0.295
-  separation: 0.69
+  separation: 0.96
 lidar:
-  x: 0.10
-  z: 0.20
+  x: 0.29
+  z: 0.57

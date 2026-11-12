@@ -14,7 +14,7 @@
       right_wheel_names:
       - front_right_wheel_joint
       - rear_right_wheel_joint
-      wheel_separation: 0.69
+      wheel_separation: 0.96
       wheels_per_side: 2
       wheel_radius: 0.175
       odom_frame_id: odom
