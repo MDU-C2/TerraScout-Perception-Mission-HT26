@@ -5,7 +5,7 @@
     # Model configuration
     model_path: ""                       # Empty string auto-discovers package share models/best.pt
     device: "auto"                        # "auto" (uses CUDA if available, CPU otherwise), "cuda:0", or "cpu"
-    inference_imgsz: 640
+    inference_imgsz: 1280
 
     # Detection thresholds & processing rate
     confidence_threshold: 0.50            # Threshold >= 0.50 accepts configured class

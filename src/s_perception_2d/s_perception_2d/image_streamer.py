@@ -31,7 +31,9 @@ class ImageStreamerNode(Node):
                 ws_root = p
                 break
 
-        default_dir = ws_root / "dataset" / "Car-Silhouettes-Forest.v1i.yolov8" / "test" / "images"
+        default_dir = ws_root / "dataset" / "DataSetFull.v2i (2).yolov8" / "test" / "images"
+        if not default_dir.exists():
+            default_dir = ws_root / "dataset" / "Car-Silhouettes-Forest.v1i.yolov8" / "test" / "images"
         if not default_dir.exists():
             default_dir = ws_root / "dataset" / "test" / "images"
 

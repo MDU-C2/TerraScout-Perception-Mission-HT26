@@ -21,7 +21,7 @@ recordings/
 runs/
 runs_yolo/
 *.pt
-!src/s_perception_2d/models/best.pt
+!src/s_perception_2d/models/*.pt
 .venv/
 .ruff_cache/
 /site.yaml

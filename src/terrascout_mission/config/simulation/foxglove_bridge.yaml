@@ -3,7 +3,7 @@
     port: <foxglove_port>
     address: <foxglove_address>
     num_threads: 2
-    send_buffer_limit: 1000000
+    send_buffer_limit: 20000000
     max_qos_depth: 5
     topic_whitelist:
     - ^/clock$
