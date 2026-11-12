@@ -1403,7 +1403,6 @@ class GroundMissionServer(Node):
                         f"Nav2 ended with status {status} after "
                         f"{mission.waypoint_retries + 1} attempt(s)",
                         next_target=next_target,
-                        backtrack=True,
                     )
                     return
             attempts = mission.waypoint_retries + 1

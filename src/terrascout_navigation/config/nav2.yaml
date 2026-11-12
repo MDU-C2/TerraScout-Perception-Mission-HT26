@@ -42,13 +42,14 @@
         type: polygon
         visualize: true
 
-      # Inner zone: stop
-      PolygonStop:
-        action_type: stop
+      # Inner zone: reduce speed by 80% (retain 20%).
+      PolygonSlow80:
+        action_type: slowdown
         enabled: true
         points: '[[0.51, 0.39], [0.51, -0.39], [-0.51, -0.39], [-0.51, 0.39]]'
-        polygon_pub_topic: polygon_stop
-        min_points: 5
+        polygon_pub_topic: polygon_slow80
+        slowdown_ratio: 0.2
+        min_points: 10
         type: polygon
         visualize: true
       # Match the segmentation cloud's ground-level height reference.
@@ -61,13 +62,15 @@
         # Match the segmentation obstacle band relative to base_footprint.
         max_height: 0.9
         min_height: 0.1
-        source_timeout: 0.3
+        # Simulation logs show point-cloud timestamp gaps of 0.30–0.47 s;
+        # tolerate brief jitter but still stop if the source is stale >0.6 s.
+        source_timeout: 0.6
         topic: obstacle_points
         type: pointcloud
       polygons:
         - PolygonSlow30
         - PolygonSlow60
-        - PolygonStop
+        - PolygonSlow80
       state_topic: collision_monitor_state
       stop_pub_timeout: 2.0
       transform_tolerance: 0.5
@@ -129,7 +132,7 @@
       rotate_to_heading_angular_vel: 0.7
       controller_frequency: 20.0
       enable_stamped_cmd_vel: true
-      failure_tolerance: 0.3
+      failure_tolerance: 2.0
       general_goal_checker:
         plugin: nav2_controller::SimpleGoalChecker
         # Mission completion is based on position; do not require a final heading.
@@ -152,7 +155,7 @@
       progress_checker:
         plugin: nav2_controller::SimpleProgressChecker
         # Allow slow/cautious motion and brief replanning before declaring a stall.
-        movement_time_allowance: 15.0
+        movement_time_allowance: 20.0
         required_movement_radius: 0.25
         # Rotation alone can count as progress after a small heading correction.
         required_movement_angle: 0.25
@@ -186,6 +189,12 @@
           max_cost: 150.0            # Limit terrain penalties to nonlethal Nav2 costs
           invert_traversability: false
           qos_reliability: reliable
+          # Bootstrap the known-safe spawn footprint over startup self-returns
+          # and blind-zone artifacts, then latch off after initial movement.
+          clear_under_footprint: true
+          clear_under_footprint_radius: 0.6
+          clear_until_moved_m: 0.5
+          clear_footprint_forgets: true
         stvl_layer:
           plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer
           enabled: true
@@ -216,7 +225,7 @@
             observation_persistence: 0.0
             filter: voxel
             # Match local filtering to suppress low-density stray returns.
-            voxel_min_points: 3
+            voxel_min_points: 2
             clear_after_reading: true
           obstacle_clear:
             enabled: true
@@ -247,10 +256,12 @@
             filter: voxel
             voxel_min_points: 1
             clear_after_reading: true
+        # Keep traversability last so its temporary spawn-footprint FREE_SPACE
+        # override is applied after obstacle marking and inflation.
         plugins:
-        - traversability_layer
         - stvl_layer
         - inflation_layer
+        - traversability_layer
         # Global planning map; keep below local update rate to limit CPU load.
         update_frequency: 3.0
         publish_frequency: 2.0
@@ -285,6 +296,11 @@
           max_cost: 150.0            # Limit terrain penalties to nonlethal Nav2 costs
           invert_traversability: false
           qos_reliability: reliable
+          # Apply the same temporary spawn-area clearing to the local map.
+          clear_under_footprint: true
+          clear_under_footprint_radius: 0.6
+          clear_until_moved_m: 0.5
+          clear_footprint_forgets: true
         stvl_layer:
           plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer
           enabled: true
@@ -315,7 +331,7 @@
             observation_persistence: 0.0
             filter: voxel
             # Match global filtering while rejecting only isolated returns.
-            voxel_min_points: 4
+            voxel_min_points: 2
             clear_after_reading: true
           obstacle_clear:
             enabled: true
@@ -344,10 +360,12 @@
             filter: voxel
             voxel_min_points: 1
             clear_after_reading: true
+        # Keep traversability last so its temporary spawn-footprint FREE_SPACE
+        # override is applied after obstacle marking and inflation.
         plugins:
-        - traversability_layer
         - stvl_layer
         - inflation_layer
+        - traversability_layer
         # Refresh the rolling obstacle map near the 10 Hz simulated LiDAR rate.
         update_frequency: 10.0
         publish_frequency: 2.0

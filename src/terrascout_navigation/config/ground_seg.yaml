@@ -9,7 +9,7 @@
     cellSizeY: 1.0
     cellSizeZ: 10.0
     cellSizeZPhase2: 0.2
-    slopeThresholdDegrees: 20.0
+    slopeThresholdDegrees: 40.0
     # Retain the baseline plane-fit tolerance so low root/terrain returns can
     # remain ground; obstacle_min_height separately filters the published cloud.
     groundInlierThreshold: 0.07

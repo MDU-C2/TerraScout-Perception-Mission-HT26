@@ -13,7 +13,7 @@ from fleet_config.targets import TARGETS
 from fleet_unit.manifest import Manifest, Process, load_manifest
 
 COLLISION_MONITOR_PLUGIN = "nav2_collision_monitor::CollisionMonitor"
-REQUIRED_POLYGON_ACTIONS = ("stop", "slowdown")
+REQUIRED_POLYGON_ACTIONS = ("slowdown",)
 CLIENT_PUBLISH = "clientPublish"
 FIXPOSITION_NAV2_EDGES = (("FP_ENU0", "map"), ("map", "odom"), ("odom", "vrtk_link"))
 

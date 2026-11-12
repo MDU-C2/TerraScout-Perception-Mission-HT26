@@ -71,7 +71,7 @@ CONTROLLERS_CONFIG = SourceFile(HARDWARE_PACKAGE, "config/controllers.yaml")
 COSTMAPS = ("global_costmap", "local_costmap")
 GLOBAL_COSTMAP_KEYS = (UNIT_PLACEHOLDER, "global_costmap", "global_costmap", "ros__parameters")
 COLLISION_MONITOR = "collision_monitor"
-COLLISION_POLYGONS = ("PolygonStop", "PolygonSlow30", "PolygonSlow60")
+COLLISION_POLYGONS = ("PolygonSlow80", "PolygonSlow30", "PolygonSlow60")
 
 FRAME_BASE = "base_link"
 FRAME_GLOBAL = "map"
@@ -329,7 +329,7 @@ def lidar_processes(unit: UnitContext, after: list[str]) -> list[Process]:
             after=after,
             ready=MessageProbe(f"/{unit.namespace}/lidar_points_raw"),
         ),
-        lidar_filter(unit, f"{LIDAR_NAME}_filter", after),
+        lidar_filter(unit, f"{LIDAR_NAME}_filter", [*after, LIDAR_NAME]),
     ]
 
 
@@ -393,6 +393,7 @@ def fast_lio_odom_adapter(unit: UnitContext, after: list[str]) -> Process:
 
 
 def ground_segmentation(unit: UnitContext, after: list[str]) -> Process:
+    filter_name = "lidar_filter" if unit.mode == SIMULATION else f"{LIDAR_NAME}_filter"
     return node(
         "ground_seg",
         package="ground_segmentation_ros2",
@@ -410,8 +411,9 @@ def ground_segmentation(unit: UnitContext, after: list[str]) -> Process:
             },
             TF_REMAPS,
         ),
-        after=after,
+        after=[*after, filter_name],
         output="log" if unit.mode == SIMULATION else "screen",
+        ready=MessageProbe(f"/{unit.namespace}/obstacle_points"),
     )
 
 
@@ -573,7 +575,7 @@ def localization_processes(unit: UnitContext, after: list[str]) -> list[Process]
     processes += hardware_processes(unit, after)
     processes += ros2_control_processes(unit)
     if unit.mode == SIMULATION:
-        processes.append(lidar_filter(unit, "lidar_filter", after))
+        processes.append(lidar_filter(unit, "lidar_filter", [*after, "gz_bridge"]))
     return processes
 
 
@@ -772,7 +774,7 @@ def processes(unit: UnitContext) -> list[Process]:
     simulated = unit.mode == SIMULATION
     stage_after = [ROBOT_SPAWN, CLOCK_BRIDGE] if simulated else [CLOCK_SYNC]
     localization = localization_processes(unit, stage_after)
-    navigation_after = [process.name for process in localization] if simulated else [CLOCK_SYNC]
+    navigation_after = [process.name for process in localization]
     entries: list[Process] = []
     if simulated:
         entries += [
