@@ -9,7 +9,8 @@ from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from tf2_ros import TransformBroadcaster
+from tf2_ros import (TransformBroadcaster, Buffer, TransformListener, TransformException)
+
 
 from fleet_common import signals
 from fleet_common.params import declare
@@ -17,8 +18,8 @@ from fleet_common.params import declare
 ODOM_FRAME = "odom"
 BASE_FRAME = "base_link"
 ROOT_FRAME = "vrtk_link"
-IMU_Z_IN_BASE = 0.15
-IMU_Z_IN_ROOT = 0.48
+# IMU_Z_IN_BASE = 0.15
+# IMU_Z_IN_ROOT = 0.48
 
 
 def _rotate(q, vector):
@@ -51,6 +52,10 @@ class FastLioOdomAdapter(Node):
         super().__init__("fast_lio_odom_adapter")
         self._publisher = self.create_publisher(Odometry, "odom", 20)
         self._tf = TransformBroadcaster(self)
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self._imu_to_base = None
+        self._imu_to_root = None
         self._previous = None
         self._filtered_twist = None
         self._alpha = float(
@@ -80,6 +85,15 @@ class FastLioOdomAdapter(Node):
                 f"{source.header.frame_id} -> {source.child_frame_id}"
             )
             return
+        
+        if self._imu_to_base is None or self._imu_to_root is None:
+            try:
+                self._imu_to_base = self.tf_buffer.lookup_transform("microstrain_imu_link","base_link",rclpy.time.Time())
+                self._imu_to_root = self.tf_buffer.lookup_transform("microstrain_imu_link","vrtk_link",rclpy.time.Time())
+            except TransformException as ex:
+                self.get_logger().warning(f"Waiting for IMU transforms: {ex}")
+                return
+    
         pose = source.pose.pose
         q = (pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w)
         norm = math.sqrt(sum(value * value for value in q))
@@ -88,10 +102,27 @@ class FastLioOdomAdapter(Node):
             self.get_logger().error("Ignoring invalid FAST-LIO pose")
             return
         q = tuple(value / norm for value in q)
-        base = _rotate(q, (0.0, 0.0, -IMU_Z_IN_BASE))
-        root = _rotate(q, (0.0, 0.0, -IMU_Z_IN_ROOT))
-        base_position = tuple(position[i] + base[i] for i in range(3))
-        root_position = tuple(position[i] + root[i] for i in range(3))
+
+
+        # IMU -> base_link translation and rotation from URDF
+        t_base = self._imu_to_base.transform.translation
+        r_base = self._imu_to_base.transform.rotation
+
+        # IMU -> vrtk_link translation and rotation from URDF
+        t_root = self._imu_to_root.transform.translation
+        r_root = self._imu_to_root.transform.rotation
+
+        # Transform positions from IMU frame into odom frame
+        base_offset = _rotate(q, (t_base.x, t_base.y, t_base.z))
+        root_offset = _rotate(q, (t_root.x, t_root.y, t_root.z))
+
+        base_position = tuple(position[i] + base_offset[i] for i in range(3))
+        root_position = tuple(position[i] + root_offset[i] for i in range(3))
+
+        # Calculate orientation of base_link and vrtk_link
+        base_q = _multiply(q, (r_base.x, r_base.y, r_base.z, r_base.w))
+        root_q = _multiply(q, (r_root.x, r_root.y, r_root.z, r_root.w))
+
         stamp = source.header.stamp.sec + source.header.stamp.nanosec * 1e-9
 
         output = Odometry()
@@ -100,28 +131,28 @@ class FastLioOdomAdapter(Node):
         output.child_frame_id = BASE_FRAME
         output.pose.pose.position.x, output.pose.pose.position.y, output.pose.pose.position.z = base_position
         (output.pose.pose.orientation.x, output.pose.pose.orientation.y,
-         output.pose.pose.orientation.z, output.pose.pose.orientation.w) = q
+         output.pose.pose.orientation.z, output.pose.pose.orientation.w) = base_q
         output.pose.covariance = list(source.pose.covariance)
 
         if self._previous is None:
-            self._previous = (stamp, base_position, q)
+            self._previous = (stamp, base_position, base_q)
             return
         old_stamp, old_position, old_q = self._previous
         dt = stamp - old_stamp
         if not 0.0 < dt <= 0.5:
-            self._previous = (stamp, base_position, q)
+            self._previous = (stamp, base_position, base_q)
             self._filtered_twist = None
             return
         speed = math.dist(base_position, old_position) / dt
         if speed > 3.0:
             self.get_logger().error(f"Ignoring FAST-LIO odometry jump ({speed:.2f} m/s)")
-            self._previous = (stamp, base_position, q)
+            self._previous = (stamp, base_position, base_q)
             self._filtered_twist = None
             return
         world_velocity = tuple((base_position[i] - old_position[i]) / dt for i in range(3))
-        inverse_q = (-q[0], -q[1], -q[2], q[3])
+        inverse_q = (-base_q[0], -base_q[1], -base_q[2], base_q[3])
         linear = _rotate(inverse_q, world_velocity)
-        dq = _multiply((-old_q[0], -old_q[1], -old_q[2], old_q[3]), q)
+        dq = _multiply((-old_q[0], -old_q[1], -old_q[2], old_q[3]), base_q)
         if dq[3] < 0.0:
             dq = tuple(-v for v in dq)
         vnorm = math.sqrt(sum(dq[i] * dq[i] for i in range(3)))
@@ -144,9 +175,10 @@ class FastLioOdomAdapter(Node):
         transform.child_frame_id = ROOT_FRAME
         (transform.transform.translation.x, transform.transform.translation.y,
          transform.transform.translation.z) = root_position
-        transform.transform.rotation = output.pose.pose.orientation
+        #transform.transform.rotation = output.pose.pose.orientation
+        (transform.transform.rotation.x,transform.transform.rotation.y,transform.transform.rotation.z,transform.transform.rotation.w) = root_q
         self._tf.sendTransform(transform)
-        self._previous = (stamp, base_position, q)
+        self._previous = (stamp, base_position, base_q)
 
 
 def main():

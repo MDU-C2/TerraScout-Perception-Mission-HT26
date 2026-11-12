@@ -79,6 +79,12 @@ class RobotDescription:
     path: str
     arguments: Mapping[str, str] = EMPTY
 
+@dataclass(frozen=True)
+class UrdfExtrinsics:
+    description: RobotDescription
+    target_frame: str
+    source_frame: str
+
 
 @dataclass(frozen=True)
 class PackageFile:
@@ -133,6 +139,7 @@ class Process:
     args: tuple[str, ...] = ()
     env: Mapping[str, str] = EMPTY
     robot_description: RobotDescription | None = None
+    urdf_extrinsics: UrdfExtrinsics | None = None
     container: str | None = None
     load: tuple[ComponentSpec, ...] = ()
     cmd: tuple[str, ...] = ()

@@ -21,6 +21,7 @@ from fleet_unit.manifest import (
     Probe,
     Process,
     RobotDescription,
+    UrdfExtrinsics,
     SpawnSpec,
     StagedFile,
     TopicProbe,
@@ -115,6 +116,7 @@ def node(
     remaps: Mapping[str, str] | None = None,
     args: Iterable[str] = (),
     robot_description: RobotDescription | None = None,
+    urdf_extrinsics: UrdfExtrinsics | None = None,
     kind: str = "node",
     ready: Probe | None = None,
     output: str = "screen",
@@ -132,6 +134,7 @@ def node(
         remaps=frozen(remaps),
         args=tuple(args),
         robot_description=robot_description,
+        urdf_extrinsics=urdf_extrinsics,
         **_common(name, kind, after, ready, output, env, wait_for, ()),
     )
 

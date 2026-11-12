@@ -51,6 +51,7 @@ from fleet_unit.manifest import (
     NodeProbe,
     Process,
     RobotDescription,
+    UrdfExtrinsics,
     WaitFor,
 )
 
@@ -357,6 +358,11 @@ def fast_lio_simulation(unit: UnitContext) -> Process:
         node_name="laser_mapping",
         namespace=namespace,
         params=(params_path("fast_lio_sim.yaml"),),
+        urdf_extrinsics=UrdfExtrinsics(
+            description=robot_description(unit),
+            target_frame="microstrain_imu_link",
+            source_frame="lidar_link",
+        ),
         param_values={
             "common.lid_topic": f"/{namespace}/lidar_points_raw",
             "common.imu_topic": f"/{namespace}/microstrain/imu/data",

@@ -12,6 +12,7 @@ import yaml
 from fleet_unit.errors import UnitError
 from fleet_unit.manifest import ComponentSpec, Manifest, Process, RobotDescription, SpawnSpec
 from fleet_unit.packages import package_executable, package_file, package_share
+from fleet_unit.urdf_extrinsics import urdf_extrinsics
 
 ROUTER_EXECUTABLE = "zenohd"
 SPAWN_PACKAGE = "ros_gz_sim"
@@ -117,6 +118,44 @@ def node_argv(manifest: Manifest, process: Process) -> list[str]:
                 f"{name}:={format_parameter_value(environment_value(manifest, process.name, variable))}",
             ]
         )
+
+
+    # Calculate sensor extrinsics from the URDF, if requested.
+    if process.urdf_extrinsics is not None:
+        spec = process.urdf_extrinsics
+
+        # Expand the Xacro into a complete URDF.
+        xml = robot_description_xml(
+            manifest,
+            process,
+            spec.description,
+        )
+
+        # Calculate the sensor transformation.
+        try:
+            extrinsic_T, extrinsic_R = urdf_extrinsics(
+                xml,
+                spec.target_frame,
+                spec.source_frame,
+            )
+        except ValueError as exc:
+            raise UnitError(
+                "calculate URDF extrinsics",
+                exc,
+                manifest.unit,
+                process.name,
+            ) from exc
+
+        # Pass the calculated values as ROS 2 parameters.
+        argv.extend([
+            "-p",
+            f"mapping.extrinsic_T:={format_parameter_value(extrinsic_T)}",
+            "-p",
+            f"mapping.extrinsic_R:={format_parameter_value(extrinsic_R)}",
+        ])
+
+
+
     if process.robot_description is not None:
         content = robot_description_xml(manifest, process, process.robot_description)
         argv.extend(["-p", f"robot_description:={format_parameter_value(content)}"])
