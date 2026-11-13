@@ -156,25 +156,30 @@ These topics should also use the appropriate QoS configuration where required.
 
 ## 5. Record and Compare FAST-LIO2 Odometry
 
-Use the `sim-record` target to record MCAP bags containing FAST-LIO2 odometry and Gazebo ground truth. The default `sim` target does not enable recording.
+Recording is disabled for the default `sim` target. Use `sim-record` for the standard recording simulation, or `sim-elevation-pc` for the elevation-PC Zenoh deployment, which currently also enables recording in `src/fleet_config/fleet_config/targets.py`.
 
-From the workspace root, build and start the recording-enabled simulation:
+From the workspace root, select the elevation-PC deployment, build the selected configuration (including its recorder process), then start it:
 
 ```sh
-make use TARGET=sim-record
+make use TARGET=sim-elevation-pc
 make build
 make up
+make up TARGET=sim-elevation-pc
 ```
+
+For the standard local recording simulation, use `make use TARGET=sim-record` instead. Confirm the recorder reports ready in startup output. The elevation-PC uplink address and interface are configured in `src/fleet_config/fleet_config/targets.py`; update them if the computer's network interface/address changes.
 
 Run the mission or route you want to evaluate while the simulation is running. To finish the recording, press **Ctrl+C** in the terminal running `make up` and wait for the stack to stop and the prompt to return. Alternatively, run `make down` from a second terminal. Do not kill the recorder/container forcefully; it needs to shut down normally to write the bag metadata.
 
-The bag is saved under `.sage/run/1/recordings/terrascout1/` for SAGE instance 1. Use the matching instance directory if you started with `SAGE_INSTANCE` set to another number. After the stack has stopped, run the comparison from the workspace root:
+Stop the stack normally with Ctrl+C in `make up` or `make down` from another terminal; do not force-kill the recorder, because it must finalize `metadata.yaml`. For SAGE instance 1, recordings are written under `.sage/run/1/recordings/terrascout1/` and completed runs are archived under `runs/<run-id>/recordings/terrascout1/`. Use the matching instance directory if `SAGE_INSTANCE` differs. Verify the new bag contains `metadata.yaml`, then run the processor from the workspace root:
 
 ```sh
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 python3 src/terrascout_navigation/terrascout_navigation/scripts/process_mission_recording.py --show-trajectory
 ```
+
+Without `--bag`, the processor selects the completed bag with the newest metadata-file modification time across the active recording directory and archived runs. To choose a specific recording, pass `--bag /absolute/path/to/rosbag_directory`. A mission report requires a positive mission ID in the recorded state topic; if none was recorded, the processor still keeps the FAST-LIO comparison and notes that the mission report was skipped.
 
 The comparison script is `compare_fast_lio_gt.py` (there is no `compare_odom_mcap.py` file). It reads `/terrascout1/fast_lio/odometry` and `/terrascout1/odom_gt`, then writes its timestamped error CSV and three plots into the same `mission_results/mission_*` bundle as the mission report. It does not use or create a separate `fast_lio_error_results/` directory. The filename prefix uses Swedish local time (Europe/Stockholm), converting rosbag folder timestamps from UTC. `--show-trajectory` opens the overlay after saving it. Its errors are relative trajectory drift after first-pose alignment, not absolute localization error.
 
