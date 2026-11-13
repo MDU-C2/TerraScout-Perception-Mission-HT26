@@ -216,8 +216,12 @@ class LidarFilter(Node):
     def __init__(self):
         super().__init__("lidar_filter")
 
-        self.declare_parameter("robot_description", "")
-        urdf_xml = self.get_parameter("robot_description").value
+        urdf_xml = declare(
+            self,
+            "robot_description",
+            rclpy.Parameter.Type.STRING,
+            "URDF description used to derive LiDAR self-filter geometry",
+        )
 
         if not urdf_xml:
             raise RuntimeError("Missing robot_description parameter")

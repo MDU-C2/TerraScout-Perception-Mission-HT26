@@ -25,6 +25,19 @@ def _make_cloud_data(points: list[tuple[float, float, float]]) -> tuple[bytes, i
 # Livox Mid-360 format: x(f32) y(f32) z(f32) intensity(f32) tag(u8) line(u8) timestamp(f64)
 _LIVOX_STEP = 26
 
+# Small deterministic geometry fixture for the pure mask tests. This mirrors
+# the filter envelope used by the current TerraScout model without requiring
+# ROS or loading the robot description in every test.
+_TEST_ROBOT_GEOMETRY = (
+    (-0.40, 0.40, -0.45, 0.45, -0.75, -0.05),
+    [
+        (-0.395, -0.345, -0.625, 0.20, 0.09),
+        (-0.395, 0.345, -0.625, 0.20, 0.09),
+        (0.195, -0.345, -0.625, 0.20, 0.09),
+        (0.195, 0.345, -0.625, 0.20, 0.09),
+    ],
+)
+
 
 def _make_livox_data(
     points: list[tuple[float, float, float, int]],
@@ -45,6 +58,7 @@ def _filter_points(data: bytes, point_step: int, **kwargs) -> np.ndarray:
     """Import and run the core filter logic."""
     from terrascout_navigation.lidar_filter import _valid_mask
 
+    kwargs.setdefault("robot_geometry", _TEST_ROBOT_GEOMETRY)
     return _valid_mask(data, point_step, **kwargs)
 
 

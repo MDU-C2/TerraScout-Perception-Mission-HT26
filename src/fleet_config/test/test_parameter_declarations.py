@@ -141,6 +141,10 @@ def rendered_values(unit_dir, process):
             if key == "/**" or key.split("/")[-1] == process.node_name:
                 values.update(section.get("ros__parameters", {}))
     values.update(process.param_values)
+    if process.robot_description is not None:
+        # robot_description is rendered from the model descriptor rather than
+        # stored as a literal in the process parameter files.
+        values.setdefault("robot_description", process.robot_description)
     return {name: value for name, value in values.items() if name not in ROS_PARAMETERS}
 
 
