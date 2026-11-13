@@ -341,6 +341,7 @@ def lidar_filter(unit: UnitContext, name: str, after: list[str]) -> Process:
         executable="lidar_filter.py",
         node_name=name,
         namespace=unit.namespace,
+        robot_description=robot_description(unit),
         param_values={"filter_noise_tag": unit.mode == PHYSICAL},
         remaps={"cloud_in": "lidar_points_raw", "cloud_out": "lidar_points_filtered"},
         after=after,
