@@ -8,7 +8,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
   s_perception_2d/detector_node.py
-  s_perception_2d/image_streamer.py
+  s_perception_2d/keyboard_teleop.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

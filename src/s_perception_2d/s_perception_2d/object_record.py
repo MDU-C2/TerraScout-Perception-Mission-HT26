@@ -110,25 +110,24 @@ class ObjectRecordHandler:
     """
 
     DEFAULT_CONFIGURED_CLASSES = [
-        "pedestrian_sign",
-        "roadwork_sign",
-        "stop-sign",
-        "warning_bag",
+        "Apache friendly",
+        "Ka-52 Enemy",
     ]
 
     def __init__(
         self,
         configured_classes: Optional[List[str]] = None,
-        confidence_threshold: float = 0.35,
+        confidence_threshold: float = 0.50,
+        min_noise_threshold: float = 0.15,
         min_box_size_px: float = 8.0,
         allow_unknown_records: bool = True,
     ):
         """
         :param configured_classes: List of supported class names.
-        :param confidence_threshold: Minimum acceptable confidence score.
+        :param confidence_threshold: Threshold >= confidence_threshold accepts configured class.
+        :param min_noise_threshold: Detections <= min_noise_threshold are ignored as noise.
         :param min_box_size_px: Minimum width and height for a valid box.
-        :param allow_unknown_records: If True, unsupported classes become 'unknown'.
-                                      If False, unsupported classes are marked invalid.
+        :param allow_unknown_records: If True, unsupported or low-confidence classes become 'unknown'.
         """
         if configured_classes is None:
             self.configured_classes = set(self.DEFAULT_CONFIGURED_CLASSES)
@@ -136,6 +135,7 @@ class ObjectRecordHandler:
             self.configured_classes = set(configured_classes)
 
         self.confidence_threshold = float(confidence_threshold)
+        self.min_noise_threshold = float(min_noise_threshold)
         self.min_box_size_px = float(min_box_size_px)
         self.allow_unknown_records = bool(allow_unknown_records)
 
@@ -151,6 +151,10 @@ class ObjectRecordHandler:
     ) -> ObjectRecord:
         """
         Validates raw detection and creates an ObjectRecord.
+        Implements 3-tier confidence logic:
+        - conf >= confidence_threshold: Accept configured class
+        - min_noise_threshold < conf < confidence_threshold: Override label to 'unknown'
+        - conf <= min_noise_threshold: Discard completely as noise
         """
         x1, y1, x2, y2 = float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])
         conf = float(confidence)
@@ -164,10 +168,10 @@ class ObjectRecordHandler:
         is_valid = True
         status_reasons = []
 
-        # 1. Confidence validation
-        if conf < self.confidence_threshold:
+        # 1. Noise threshold check: if <= min_noise_threshold, reject completely
+        if conf <= self.min_noise_threshold:
             is_valid = False
-            status_reasons.append("LOW_CONFIDENCE")
+            status_reasons.append("NOISE_BELOW_MIN_THRESHOLD")
 
         # 2. Geometric box validation
         if width < self.min_box_size_px or height < self.min_box_size_px:
@@ -179,17 +183,30 @@ class ObjectRecordHandler:
                 is_valid = False
                 status_reasons.append("OUT_OF_BOUNDS")
 
-        # 3. Class assignment: Configured class vs 'unknown'
+        # 3. 3-tier confidence classification & Class assignment:
+        # Tier 1: conf >= confidence_threshold -> Accept class if in configured_classes
+        # Tier 2: min_noise_threshold < conf < confidence_threshold -> Override to 'unknown'
         assigned_class: str
-        if raw_class_name in self.configured_classes:
-            assigned_class = raw_class_name
-        else:
+        if conf >= self.confidence_threshold:
+            if raw_class_name in self.configured_classes:
+                assigned_class = raw_class_name
+            else:
+                assigned_class = "unknown"
+                if not self.allow_unknown_records:
+                    is_valid = False
+                    status_reasons.append("UNCONFIGURED_CLASS_REJECTED")
+                else:
+                    status_reasons.append("ASSIGNED_UNKNOWN")
+        elif conf > self.min_noise_threshold:
+            # Low confidence but above noise: override to unknown
             assigned_class = "unknown"
             if not self.allow_unknown_records:
                 is_valid = False
-                status_reasons.append("UNCONFIGURED_CLASS_REJECTED")
+                status_reasons.append("LOW_CONFIDENCE_REJECTED")
             else:
-                status_reasons.append("ASSIGNED_UNKNOWN")
+                status_reasons.append("LOW_CONFIDENCE_OVERRIDE_UNKNOWN")
+        else:
+            assigned_class = "unknown"
 
         if is_valid and not status_reasons:
             status = "VALID"

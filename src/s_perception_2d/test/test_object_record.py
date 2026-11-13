@@ -8,20 +8,21 @@ from s_perception_2d.object_record import ObjectRecord, ObjectRecordHandler
 
 def test_configured_class_assignment():
     handler = ObjectRecordHandler(
-        configured_classes=["pedestrian_sign", "roadwork_sign", "stop-sign", "warning_bag"],
-        confidence_threshold=0.35,
+        configured_classes=["Apache friendly", "Ka-52 Enemy"],
+        confidence_threshold=0.50,
+        min_noise_threshold=0.15,
     )
 
     record = handler.validate_and_create_record(
-        raw_class_name="warning_bag",
+        raw_class_name="Apache friendly",
         confidence=0.88,
         xyxy=(100.0, 150.0, 300.0, 450.0),
         frame_id="oakd_rgb_camera_optical_frame",
     )
 
     assert record.is_valid is True
-    assert record.class_name == "warning_bag"
-    assert record.raw_class_name == "warning_bag"
+    assert record.class_name == "Apache friendly"
+    assert record.raw_class_name == "Apache friendly"
     assert record.confidence == 0.88
     assert record.x1 == 100.0
     assert record.y1 == 150.0
@@ -36,8 +37,9 @@ def test_configured_class_assignment():
 
 def test_unknown_fallback_for_unsupported_class():
     handler = ObjectRecordHandler(
-        configured_classes=["pedestrian_sign", "roadwork_sign", "stop-sign", "warning_bag"],
-        confidence_threshold=0.35,
+        configured_classes=["Apache friendly", "Ka-52 Enemy"],
+        confidence_threshold=0.50,
+        min_noise_threshold=0.15,
         allow_unknown_records=True,
     )
 
@@ -55,30 +57,42 @@ def test_unknown_fallback_for_unsupported_class():
     assert "ASSIGNED_UNKNOWN" in record.validation_status
 
 
-def test_confidence_threshold_rejection():
+def test_confidence_three_tier_logic():
     handler = ObjectRecordHandler(
-        configured_classes=["warning_bag"],
+        configured_classes=["Apache friendly", "Ka-52 Enemy"],
         confidence_threshold=0.50,
+        min_noise_threshold=0.15,
     )
 
-    record = handler.validate_and_create_record(
-        raw_class_name="warning_bag",
-        confidence=0.30,  # Below threshold
+    # 1. Low confidence (0.15 < conf < 0.50) -> overrides to unknown, remains valid for publishing
+    rec_low = handler.validate_and_create_record(
+        raw_class_name="Apache friendly",
+        confidence=0.30,
         xyxy=(10.0, 10.0, 100.0, 100.0),
     )
+    assert rec_low.is_valid is True
+    assert rec_low.class_name == "unknown"
+    assert rec_low.raw_class_name == "Apache friendly"
+    assert rec_low.validation_status == "LOW_CONFIDENCE_OVERRIDE_UNKNOWN"
 
-    assert record.is_valid is False
-    assert "LOW_CONFIDENCE" in record.validation_status
+    # 2. Noise floor (conf <= 0.15) -> completely rejected
+    rec_noise = handler.validate_and_create_record(
+        raw_class_name="Apache friendly",
+        confidence=0.10,
+        xyxy=(10.0, 10.0, 100.0, 100.0),
+    )
+    assert rec_noise.is_valid is False
+    assert rec_noise.validation_status == "NOISE_BELOW_MIN_THRESHOLD"
 
 
 def test_box_size_validation():
     handler = ObjectRecordHandler(
-        configured_classes=["warning_bag"],
+        configured_classes=["Apache friendly", "Ka-52 Enemy"],
         min_box_size_px=10.0,
     )
 
     record = handler.validate_and_create_record(
-        raw_class_name="warning_bag",
+        raw_class_name="Apache friendly",
         confidence=0.90,
         xyxy=(10.0, 10.0, 12.0, 12.0),  # 2x2 box, smaller than 10px
     )
@@ -89,8 +103,8 @@ def test_box_size_validation():
 
 def test_to_dict_serialization():
     record = ObjectRecord(
-        class_name="warning_bag",
-        raw_class_name="warning_bag",
+        class_name="Apache friendly",
+        raw_class_name="Apache friendly",
         confidence=0.95,
         x1=10.0,
         y1=20.0,
@@ -104,7 +118,7 @@ def test_to_dict_serialization():
     )
 
     d = record.to_dict()
-    assert d["class_name"] == "warning_bag"
+    assert d["class_name"] == "Apache friendly"
     assert d["bbox"]["center_u"] == 30.0
     assert d["bbox"]["center_v"] == 50.0
     assert d["bbox"]["width"] == 40.0
@@ -118,8 +132,8 @@ def test_to_ros_detection2d():
         pytest.skip("vision_msgs not available")
 
     record = ObjectRecord(
-        class_name="warning_bag",
-        raw_class_name="warning_bag",
+        class_name="Ka-52 Enemy",
+        raw_class_name="Ka-52 Enemy",
         confidence=0.92,
         x1=100.0,
         y1=120.0,
@@ -140,6 +154,5 @@ def test_to_ros_detection2d():
     assert ros_det.bbox.size_x == 100.0
     assert ros_det.bbox.size_y == 140.0
     assert len(ros_det.results) == 1
-    assert ros_det.results[0].hypothesis.class_id == "warning_bag"
+    assert ros_det.results[0].hypothesis.class_id == "Ka-52 Enemy"
     assert pytest.approx(ros_det.results[0].hypothesis.score, 0.001) == 0.92
-
