@@ -5,6 +5,7 @@
     num_threads: 2
     send_buffer_limit: 1000000
     max_qos_depth: 5
+
     topic_whitelist:
     - ^/clock$
     - ^/rosout$
@@ -62,9 +63,22 @@
     - ^/<robot_namespace>/tf_static$
     - ^/<robot_namespace>/trajectories$
     - ^/<robot_namespace>/waypoints_geo$
-    - ^/<robot_namespace>/front_depth/camera_info$
-    - ^/<robot_namespace>/front_depth/image$
-    - ^/<robot_namespace>/front_depth/points$
+
+    # OAK-D
+    - ^/<robot_namespace>/oakd/rgb/image_raw$
+    - ^/<robot_namespace>/oakd/rgb/camera_info$
+    - ^/<robot_namespace>/oakd/depth/image_raw$
+    - ^/<robot_namespace>/oakd/depth/camera_info$
+    - ^/<robot_namespace>/oakd/points$
+
+    # YOLO
+    - ^/<robot_namespace>/oakd/detections_2d$
+    - ^/<robot_namespace>/oakd/detections_image$
+
+    # Object tracking
+    - ^/<robot_namespace>/enemies$
+    - ^/<robot_namespace>/tracked_objects$
+
     best_effort_qos_topic_whitelist:
     - ^/<robot_namespace>/fixposition/odometry_enu$
     - ^/<robot_namespace>/fixposition/odometry_llh$
@@ -82,17 +96,25 @@
     - ^/<robot_namespace>/keepout_obstacle_points$
     - ^/<robot_namespace>/keepout_zone_marker$
     - ^/<robot_namespace>/raw_points$
-    - ^/<robot_namespace>/front_depth/image$
-    - ^/<robot_namespace>/front_depth/points$
+
+    # OAK-D sensor data
+    - ^/<robot_namespace>/oakd/rgb/image_raw$
+    - ^/<robot_namespace>/oakd/rgb/camera_info$
+    - ^/<robot_namespace>/oakd/depth/image_raw$
+    - ^/<robot_namespace>/oakd/depth/camera_info$
+    - ^/<robot_namespace>/oakd/points$
+
     client_topic_whitelist:
     - ^/<robot_namespace>/clicked_point$
     - ^/<robot_namespace>/cmd_vel_teleop$
     - ^/<robot_namespace>/estop$
     - ^/<robot_namespace>/goal_pose$
     - ^/<robot_namespace>/initialpose$
+
     service_whitelist:
     - ^/<robot_namespace>/resume_autonomy$
     - ^/<robot_namespace>/mission_waypoints/(clear|send_ordered|send_unordered)$
+
     capabilities:
     - clientPublish
     - services

@@ -3,7 +3,7 @@
 <package format="3">
   <name>fleet_simulation</name>
   <version>0.1.0</version>
-  <description>Gazebo velocity command timeout system, a simulated battery node that behaves like the physical battery monitor, and the forest world template with its tree models</description>
+  <description>Gazebo velocity command timeout system, simulated battery, forest world, and object tracking</description>
   <maintainer email="emil.persson@mdu.se">Emil Persson</maintainer>
   <license>MIT</license>
 
@@ -16,6 +16,15 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>fleet_common</exec_depend>
+
+  <!-- Perception and object tracking -->
+  <exec_depend>fleet_interfaces</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>message_filters</exec_depend>
+  <exec_depend>image_geometry</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

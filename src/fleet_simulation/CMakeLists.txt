@@ -16,7 +16,14 @@ target_compile_features(velocity_command_timeout PUBLIC cxx_std_17)
 target_link_libraries(velocity_command_timeout PRIVATE gz-sim::gz-sim gz-plugin::register)
 
 install(TARGETS velocity_command_timeout LIBRARY DESTINATION lib)
-install(PROGRAMS src/simulated_battery.py DESTINATION lib/${PROJECT_NAME})
+
+install(PROGRAMS
+  src/simulated_battery.py
+  src/enemy_reader.py
+  src/object_tracker.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY models DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY terrain DESTINATION share/${PROJECT_NAME})
 

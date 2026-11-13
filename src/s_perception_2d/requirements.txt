@@ -1,0 +1,6 @@
+# Python dependencies for s_perception_2d YOLO detector
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision
+numpy<2.0.0
+opencv-python<=4.8.0.76
