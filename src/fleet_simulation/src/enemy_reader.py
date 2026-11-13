@@ -25,7 +25,7 @@ from object_tracker import ObjectTracker
 ownOdomNoise = False
 ownPointCloudNoise = True
 
-enemyClass = 'stop-sign'
+enemyClass = 'Ka-52 Enemy'
 
 camera_offset = np.array([0.36, 0.0, 0.55])
 
@@ -399,8 +399,6 @@ class EnemyReader(Node):
             # Image
             if track.image is not None:
                 image = track.image
-
-                obj.image.header.stamp = obj.last_seen
                 obj.image.encoding = 'rgb8'
                 obj.image.height = image.shape[0]
                 obj.image.width = image.shape[1]
