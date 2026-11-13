@@ -30,7 +30,9 @@
       fov_degree: 360.0
       det_range: 40.0
       extrinsic_est_en: false
-      # LiDAR relative to IMU in base_link: (0.10, 0, 0.47) - (0, 0, 0.15).
+      # Fallback values for standalone FAST-LIO launches.
+      # Overridden at startup by URDF-derived parameters
+      # when launched through fleet_config.
       extrinsic_T: [0.10, 0.0, 0.32]
       extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
     publish:
