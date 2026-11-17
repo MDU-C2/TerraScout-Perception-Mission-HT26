@@ -16,6 +16,8 @@ from nav_msgs.msg import Odometry
 from image_geometry import PinholeCameraModel
 from scipy.spatial.transform import Rotation, Slerp
 
+from simRealDepth import simRealDepth
+
 from object_tracker import ObjectTracker
 
 #TODO, yolo confidence is still not in use
@@ -24,6 +26,8 @@ from object_tracker import ObjectTracker
 #And it is specifically for noise generated in THIS file
 ownOdomNoise = False
 ownPointCloudNoise = True
+
+reportCroppedImages = False
 
 enemyClass = 'Ka-52 Enemy'
 
@@ -84,12 +88,13 @@ class EnemyReader(Node):
             self.camera_info_callback, qos_profile_sensor_data,
         )
 
-        self.image_sub = self.create_subscription(
-            Image,
-            '/terrascout1/oakd/rgb/image_raw',
-            self.image_callback,
-            qos_profile_sensor_data,
-        )
+        if reportCroppedImages:
+            self.image_sub = self.create_subscription(
+                Image,
+                '/terrascout1/oakd/rgb/image_raw',
+                self.image_callback,
+                qos_profile_sensor_data,
+            )
 
         self.sync.registerCallback(self.sensor_callback)
         self.get_logger().info('Enemy reader started (KF + gated association)')
@@ -168,7 +173,7 @@ class EnemyReader(Node):
 
         return p, Rotation.from_quat(q).as_matrix(), age <= 0.20
 
-    #Noise added in here!
+
     def get_position_from_point_cloud(self, object_points):
 
         #Ensure x, y, z are finite and x is positve
@@ -177,27 +182,6 @@ class EnemyReader(Node):
  
         if len(valid) == 0:
             return None
-
-        #TODO refine this more
-        if ownPointCloudNoise:
-            #In accordance (ish) to: https://github.com/luxonis/luxonis-isaac-sim/blob/main/README.md
-            #Get disparity, add noise to it, calculate position from new disparity
-            #Disparity is distance in pixels between the same object in the two cameras
-
-            f = 805       #Distance between lens and sensor, calibrated to pixels
-            B = 0.075     #Distance between the cameras in meters
-        
-            disparities = f * B / valid[:, 0]
-            disparities += np.random.normal(0, 0.20, size=len(valid))
-        
-            mask = (disparities > 0)
-            valid = valid[mask]
-            disparities = disparities[mask]
-        
-            if len(valid) == 0:
-                return None
-        
-            valid[:, 0] = f * B / disparities
 
         #X is depth
         depths = valid[:, 0]
@@ -285,6 +269,9 @@ class EnemyReader(Node):
             field_names=('x', 'y', 'z'), 
             skip_nans=False,
         ).reshape(cloud_msg.height, cloud_msg.width, 3)
+
+        if ownPointCloudNoise:
+            points = simRealDepth(points)
 
         #get image seen by YOLO
         detection_time = self.message_time(detections_msg.header.stamp)
