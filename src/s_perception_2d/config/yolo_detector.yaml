@@ -8,10 +8,10 @@
     inference_imgsz: 1280              # was 1280
 
     # Detection thresholds & processing rate
-    confidence_threshold: 0.50            # Threshold >= 0.50 accepts configured class
-    min_noise_threshold: 0.15             # Detections below 0.15 are ignored completely (noise)
-    iou_threshold: 0.45                   # NMS IoU threshold
-    target_fps: 5.0                       # Maximum inference rate (Hz) to prevent CPU starvation and queue lag
+    confidence_threshold: 0.45
+    min_noise_threshold: 0.30
+    iou_threshold: 0.45
+    target_fps: 5.0                       # Maximum inference rate to prevent CPU starvation and queue
 
     # Topics (relative to node namespace so it automatically binds to the robot oakd topics)
     input_image_topic: "oakd/rgb/image_raw"

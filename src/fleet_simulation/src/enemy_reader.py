@@ -199,28 +199,6 @@ class EnemyReader(Node):
         
         return position
 
-    #Not used
-    #Cameras depth uncertainty increases with the distance to the target
-    def measurement_covariance(self, depth, R_world_robot):
-        d = max(0.2, float(depth))
-
-        f = 805
-        B = 0.075
-        sigma_disparity = 0.20
-
-        std_depth = (d**2 / (f * B)) * sigma_disparity
-
-        std_side = np.hypot(0.15 + 0.020 * d, 0.030 * d)
-        std_up = np.hypot(0.12 + 0.015 * d, 0.020 * d)
-
-        R_camera = np.diag([
-            std_depth**2,
-            std_side**2,
-            std_up**2
-        ])
-
-        return R_world_robot @ R_camera @ R_world_robot.T + np.eye(3) * 0.08**2
-
     #Nested function, the inner project() will be sent to object_tracker
     #And we do not use this file as an include there yet
     def projector(self, robot_position, R_world_robot, width, height):
