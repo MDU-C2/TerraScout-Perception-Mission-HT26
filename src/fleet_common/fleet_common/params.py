@@ -4,7 +4,7 @@ from rclpy.parameter import Parameter
 NUMERIC = (Parameter.Type.DOUBLE, Parameter.Type.INTEGER)
 
 
-def declare(node, name, kind, description, low=None, high=None, constraints=""):
+def declare(node, name, kind, description,low=None, high=None, constraints="", default=None):
     if (low is None) != (high is None):
         raise ValueError(f"declare parameter {name} failed: cause: a range needs both low and high")
     if kind in NUMERIC and low is None and not constraints:
@@ -25,7 +25,7 @@ def declare(node, name, kind, description, low=None, high=None, constraints=""):
             ]
         else:
             raise ValueError(f"declare parameter {name} failed: cause: {kind.name} takes no range")
-    value = node.declare_parameter(name, kind, descriptor).value
+    value = node.declare_parameter(name,kind if default is None else default,descriptor,).value
     if value is None:
         raise RuntimeError(f"read parameter {name} failed: cause: no value was given")
     return value

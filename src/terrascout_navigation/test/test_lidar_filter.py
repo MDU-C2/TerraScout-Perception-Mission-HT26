@@ -3,6 +3,11 @@
 import struct
 
 import numpy as np
+from functools import lru_cache
+from pathlib import Path
+
+import xacro
+from ament_index_python.packages import get_package_share_directory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,9 +46,35 @@ def _make_livox_data(
     return bytes(buf), _LIVOX_STEP
 
 
+
+@lru_cache(maxsize=1)
+def _test_robot_geometry():
+    from terrascout_navigation.lidar_filter import _geometry_from_urdf
+
+    urdf_path = (
+        Path(get_package_share_directory("terrascout_description"))
+        / "urdf"
+        / "scout.urdf.xacro"
+    )
+
+    urdf_xml = xacro.process_file(
+        str(urdf_path),
+        mappings={
+            "namespace": "terrascout",
+            "can_interface": "",
+        },
+    ).toxml()
+
+    return _geometry_from_urdf(urdf_xml)
+
+
+
+
 def _filter_points(data: bytes, point_step: int, **kwargs) -> np.ndarray:
-    """Import and run the core filter logic."""
+    """Import and run the core filter logic with URDF-derived geometry."""
     from terrascout_navigation.lidar_filter import _valid_mask
+
+    kwargs.setdefault("robot_geometry", _test_robot_geometry())
 
     return _valid_mask(data, point_step, **kwargs)
 

@@ -9,6 +9,7 @@ import tty
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from fleet_common.params import declare
 
 
 HELP_MSG = """
@@ -42,8 +43,13 @@ class KeyboardTeleop(Node):
 
     def __init__(self) -> None:
         super().__init__("terrascout_keyboard_teleop")
-        self.declare_parameter("topic", "/terrascout1/cmd_vel_teleop")
-        topic = self.get_parameter("topic").get_parameter_value().string_value
+        topic = declare(
+            self,
+            "topic",
+            rclpy.Parameter.Type.STRING,
+            "ROS topic for keyboard teleoperation velocity commands",
+            default="/terrascout1/cmd_vel_teleop",
+        )
         self.pub = self.create_publisher(Twist, topic, 10)
         self.linear_speed = 0.6
         self.angular_speed = 1.0

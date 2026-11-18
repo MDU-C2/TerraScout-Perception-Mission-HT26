@@ -104,7 +104,28 @@ def declarations_for(package, executable):
         if "test" not in path.parts
     ]
     if sources:
-        return python_declarations(sources[0])
+        declared = python_declarations(sources[0])
+
+        # Support the existing YOLO detector parameter wrapper.
+        if package == "s_perception_2d" and Path(executable).stem == "detector_node":
+            tree = ast.parse(sources[0].read_text())
+
+            for call in ast.walk(tree):
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == "_declare_param"
+                    and len(call.args) >= 2
+                ):
+                    name = literal(call.args[0])
+
+                    declared[name] = {
+                        "optional": True,
+                        "low": None,
+                        "high": None,
+                    }
+
+        return declared
     return cpp_declarations(package_dir)
 
 
@@ -157,6 +178,8 @@ def test_rendered_parameters_match_their_declarations(target, tmp_path, monkeypa
                 continue
             declared = declarations_for(package, process.executable)
             values = rendered_values(unit_dir, process)
+            if process.robot_description is not None and "robot_description" in declared:
+                values["robot_description"] = "<URDF supplied by fleet_unit>"
             where = f"{target}/{unit_dir.name}/{process.name}"
             for name in values.keys() - declared.keys():
                 raise AssertionError(

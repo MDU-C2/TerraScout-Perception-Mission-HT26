@@ -164,6 +164,7 @@ export ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/10.132.135.8
 **Note:** `ROS_DOMAIN_ID` and `ZENOH_CONFIG_OVERRIDE` may be set in a launcher, rather than in `terrascout.yaml`. If a script overwrites environment variables, edit that script instead of setting them only in the parent shell. The endpoint must point to the **PC**, not the Jetson.
 
 To find the Jetson's own IP for SSH, run on the **Jetson host**:
+**e.g., ssh terrascout1@10.132.134.79**
 
 ```bash
 ip -4 addr

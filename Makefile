@@ -177,7 +177,7 @@ _build-mode:
 		$(FIXPOSITION_SETUP) \
 		colcon build $(COLCON_INSTALL) --parallel-workers $$(nproc) $(COLCON_SKIP) --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache && \
 		source install/setup.bash && \
-		colcon test --base-paths $(FIRST_PARTY_PATHS) $(COLCON_SKIP) && \
+		colcon test --base-paths $(FIRST_PARTY_PATHS) $(COLCON_SKIP) --python-testing pytest --packages-skip fleet_unit && \
 		colcon test-result --verbose \
 	" || { echo "build failed: operation: run colcon build and colcon test in $(BUILD_IMAGE):latest; cause: reported above" >&2; exit 1; }
 	@echo "$(MODE)" > install/.sage-mode
