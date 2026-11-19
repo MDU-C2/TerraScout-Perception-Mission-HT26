@@ -50,7 +50,7 @@ TARGETS: dict[str, Target] = {
         SIM,
         deployment="elevation-pc",
         topology=Topology(uplink_address="130.243.66.211", uplink_interface="eno1"),
-        features=Features(recording_enabled=True),
+        features=Features(recording_enabled=False),
     ),
 
 }

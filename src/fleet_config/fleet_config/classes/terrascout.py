@@ -799,20 +799,35 @@ def keepout_server(unit: UnitContext, after: list[str]) -> Process:
 
 def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
 
-    processes = [
-        node(
-            YOLO_DETECTOR,
-            package=PERCEPTION_PACKAGE,
-            executable="detector_node.py",
-            node_name=YOLO_DETECTOR,
-            namespace=unit.namespace,
-            params=(YOLO_PARAMS,),
-            after=after,
-            ready=NodeProbe(f"/{unit.namespace}/{YOLO_DETECTOR}"),
-        )
-    ]
+    # Check whether YOLO is running externally on the Jetson
+    jetson_yolo = any(
+        entry.topic == f"/{unit.namespace}/oakd/detections_2d"
+        for entry in unit.boundary.imports
+    )
 
+    processes = []
+
+    # Run YOLO locally only when it is NOT offloaded
+    if not jetson_yolo:
+        processes.append(
+            node(
+                YOLO_DETECTOR,
+                package=PERCEPTION_PACKAGE,
+                executable="detector_node.py",
+                node_name=YOLO_DETECTOR,
+                namespace=unit.namespace,
+                params=(YOLO_PARAMS,),
+                after=after,
+                ready=NodeProbe(f"/{unit.namespace}/{YOLO_DETECTOR}"),
+            )
+        )
+
+    # Enemy reader always runs on the PC in simulation
     if unit.mode == SIMULATION:
+
+        # When YOLO is offloaded, do not wait for a local YOLO process
+        enemy_reader_after = after if jetson_yolo else [YOLO_DETECTOR]
+
         processes.append(
             node(
                 "enemy_reader",
@@ -820,7 +835,7 @@ def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
                 executable="enemy_reader.py",
                 node_name="enemy_reader",
                 namespace=unit.namespace,
-                after=[YOLO_DETECTOR],
+                after=enemy_reader_after,
                 ready=NodeProbe(f"/{unit.namespace}/enemy_reader"),
                 output="log",
             )

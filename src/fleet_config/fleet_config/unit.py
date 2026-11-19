@@ -178,6 +178,14 @@ def distributed_simulation_boundary(
                     None,
                 ),
 
+                # Camera images for Jetson YOLO inference
+                BoundaryEntry(
+                    f"/{namespace}/oakd/rgb/image_raw",
+                    "sensor_msgs/msg/Image",
+                    None,
+                    None,
+                ),
+
                 # Robot transformations for elevation mapping
                 BoundaryEntry(
                     f"/{namespace}/tf",
@@ -201,6 +209,22 @@ def distributed_simulation_boundary(
                     None,
                     None,
                 ),
+
+                # YOLO detections produced by the Jetson
+                BoundaryEntry(
+                    f"/{namespace}/oakd/detections_2d",
+                    "vision_msgs/msg/Detection2DArray",
+                    None,
+                    None,
+                ),
+                # Annotated YOLO camera image produced by the Jetson
+                BoundaryEntry(
+                    f"/{namespace}/oakd/detections_image",
+                    "sensor_msgs/msg/Image",
+                    None,
+                    None,
+                ),
+
             ),
         )
 
