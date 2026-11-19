@@ -29,6 +29,8 @@
     - ^/<robot_namespace>/fast_lio/path$
     - ^/<robot_namespace>/front_camera/camera_info$
     - ^/<robot_namespace>/front_camera/image$
+    - ^/<robot_namespace>/oakd/rgb/image_raw$
+    - ^/<robot_namespace>/oakd/rgb/camera_info$
     - ^/<robot_namespace>/global_costmap/costmap$
     - ^/<robot_namespace>/goal_pose$
     - ^/<robot_namespace>/ground_points$
@@ -75,6 +77,8 @@
     - ^/<robot_namespace>/lidar_imu$
     - ^/<robot_namespace>/lidar_points_filtered$
     - ^/<robot_namespace>/lidar_points_raw$
+    - ^/<robot_namespace>/oakd/rgb/image_raw$
+    - ^/<robot_namespace>/oakd/rgb/camera_info$
     - ^/<robot_namespace>/microstrain/imu/data$
     - ^/<robot_namespace>/microstrain/imu/mag$
     - ^/<robot_namespace>/navsat$

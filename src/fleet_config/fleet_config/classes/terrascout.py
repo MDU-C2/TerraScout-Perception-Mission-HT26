@@ -236,7 +236,18 @@ RECORDED_TOPICS = (
     "enemies",
     "tracked_objects",
 )
-RECORDED_TOPICS_SIMULATION = ("/clock", "front_camera/camera_info", "front_camera/image", "odom_gt", "oakd/rgb/image_raw", "oakd/rgb/camera_info", "oakd/depth/image_raw", "oakd/depth/camera_info", "oakd/points")
+# Not using front camera, using OAK-D camera instead, so removing front camera topics from recorded topics
+#RECORDED_TOPICS_SIMULATION = ("/clock", "front_camera/camera_info", "front_camera/image", "odom_gt", "oakd/rgb/image_raw", "oakd/rgb/camera_info", "oakd/depth/image_raw", "oakd/depth/camera_info", "oakd/points")
+RECORDED_TOPICS_SIMULATION = (
+    "/clock",
+    "odom_gt",
+    "oakd/rgb/image_raw",
+    "oakd/rgb/camera_info",
+    "oakd/depth/image_raw",
+    "oakd/depth/camera_info",
+    "oakd/points",
+)
+
 
 JOYSTICK_DEVICE = "/dev/input/js0"
 JOYSTICK_DEADZONE = 0.05
@@ -834,8 +845,7 @@ def processes(unit: UnitContext) -> list[Process]:
         entries.append(clock_sync([ROUTER]))
     entries += localization
     if simulated:
-        entries.append(
-            gz_bridge(unit, stage_after, MessageProbe(f"/{unit.namespace}/{CAMERA_TOPIC}"))
+        entries.append(gz_bridge(unit,stage_after,MessageProbe(f"/{unit.namespace}/lidar_points_raw"),)
         )
         entries.append(fast_lio_simulation(unit))
         entries.append(fast_lio_odom_adapter(unit, [FAST_LIO]))

@@ -165,7 +165,8 @@
 
   <link name="lidar_imu_link"/>
 
-  <gazebo reference="lidar_imu_link">
+  <!-- We are currently using microstain IMU instead -->
+  <!-- <gazebo reference="lidar_imu_link">
     <sensor name="lidar_imu" type="imu">
       <always_on>true</always_on>
       <update_rate>100</update_rate>
@@ -188,7 +189,7 @@
         </linear_acceleration>
       </imu>
     </sensor>
-  </gazebo>
+  </gazebo> -->
 
   <joint name="fp_cam_joint" type="fixed">
     <parent link="base_link"/>
@@ -198,15 +199,14 @@
 
   <link name="fp_cam_link"/>
 
-  <gazebo reference="fp_cam_link">
-    <!-- OAK-D S2 FF RGB -->
+  <!-- Using RGBD camera instead -->
+  <!-- <gazebo reference="fp_cam_link">
     <sensor name="fp_camera_sensor" type="camera">
       <always_on>true</always_on>
       <update_rate>8</update_rate>
       <topic>${ns}/front_camera/image</topic>
       <gz_frame_id>fp_cam_link</gz_frame_id>
       <camera>
-        <!-- 66 degrees -->
         <horizontal_fov>1.1519</horizontal_fov>
         <image>
           <width>640</width>
@@ -219,7 +219,8 @@
         </clip>
       </camera>
     </sensor>
-  </gazebo>
+  </gazebo> -->
+
 
   <!-- OAK-D Pro RGB-D camera -->
   <material name="black">

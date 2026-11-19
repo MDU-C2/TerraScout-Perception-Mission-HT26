@@ -2,8 +2,8 @@
   "configById": {
     "Image!1pv38o0": {
       "imageMode": {
-        "imageTopic": "/<robot_namespace>/front_camera/image",
-        "calibrationTopic": "/<robot_namespace>/front_camera/camera_info"
+        "imageTopic": "/<robot_namespace>/oakd/rgb/image_raw",
+        "calibrationTopic": "/<robot_namespace>/oakd/rgb/camera_info"
       },
       "cameraState": {
         "distance": 20,
@@ -186,9 +186,6 @@
         },
         "/<robot_namespace>/robot_description": {
           "visible": true
-        },
-        "/<robot_namespace>/front_camera/camera_info": {
-          "visible": false
         }
       },
       "layers": {

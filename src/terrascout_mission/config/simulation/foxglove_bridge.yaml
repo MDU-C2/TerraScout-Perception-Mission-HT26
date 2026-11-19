@@ -28,16 +28,16 @@
     - ^/<robot_namespace>/fast_lio/cloud_registered$
     - ^/<robot_namespace>/fast_lio/odometry$
     - ^/<robot_namespace>/fast_lio/path$
-    - ^/<robot_namespace>/front_camera/camera_info$
-    - ^/<robot_namespace>/front_camera/image$
+    # - ^/<robot_namespace>/front_camera/camera_info$
+    # - ^/<robot_namespace>/front_camera/image$
     - ^/<robot_namespace>/global_costmap/costmap$
     - ^/<robot_namespace>/goal_pose$
     - ^/<robot_namespace>/ground_points$
-    - ^/<robot_namespace>/imu$
+    # - ^/<robot_namespace>/imu$
     - ^/<robot_namespace>/initialpose$
     - ^/<robot_namespace>/joint_states$
     - ^/<robot_namespace>/joy$
-    - ^/<robot_namespace>/lidar_imu$
+    # - ^/<robot_namespace>/lidar_imu$
     - ^/<robot_namespace>/lidar_points_filtered$
     - ^/<robot_namespace>/lidar_points_raw$
     - ^/<robot_namespace>/local_costmap/costmap$
@@ -83,10 +83,10 @@
     - ^/<robot_namespace>/fixposition/odometry_enu$
     - ^/<robot_namespace>/fixposition/odometry_llh$
     - ^/<robot_namespace>/fixposition/odometry_smooth$
-    - ^/<robot_namespace>/front_camera/image$
+    # - ^/<robot_namespace>/front_camera/image$
     - ^/<robot_namespace>/ground_points$
-    - ^/<robot_namespace>/imu$
-    - ^/<robot_namespace>/lidar_imu$
+    # - ^/<robot_namespace>/imu$
+    # - ^/<robot_namespace>/lidar_imu$
     - ^/<robot_namespace>/lidar_points_filtered$
     - ^/<robot_namespace>/lidar_points_raw$
     - ^/<robot_namespace>/microstrain/imu/data$
