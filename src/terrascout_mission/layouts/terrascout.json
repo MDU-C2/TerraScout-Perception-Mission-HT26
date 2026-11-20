@@ -306,6 +306,9 @@
         },
         "/<robot_namespace>/waypoints_geo": {
           "visible": true
+        },
+        "/<robot_namespace>/keepout_zones_geo": {
+          "visible": true
         }
       },
       "zoomLevel": 17

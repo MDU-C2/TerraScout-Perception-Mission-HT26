@@ -64,6 +64,7 @@
     - ^/<robot_namespace>/tf_static$
     - ^/<robot_namespace>/trajectories$
     - ^/<robot_namespace>/waypoints_geo$
+    - ^/<robot_namespace>/keepout_zones_geo$
     - ^/<robot_namespace>/front_depth/camera_info$
     - ^/<robot_namespace>/front_depth/image$
     - ^/<robot_namespace>/front_depth/points$

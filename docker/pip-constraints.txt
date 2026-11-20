@@ -27,6 +27,7 @@ pyulog==1.2.4
 referencing==0.37.0
 requests==2.34.2
 rpds-py==2026.6.3
+setuptools<80
 toml==0.10.2
 typing-extensions==4.16.0
 typing-inspection==0.4.4

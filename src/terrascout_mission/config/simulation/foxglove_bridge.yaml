@@ -63,6 +63,7 @@
     - ^/<robot_namespace>/tf_static$
     - ^/<robot_namespace>/trajectories$
     - ^/<robot_namespace>/waypoints_geo$
+    - ^/<robot_namespace>/keepout_zones_geo$
 
     # OAK-D
     - ^/<robot_namespace>/oakd/rgb/image_raw$

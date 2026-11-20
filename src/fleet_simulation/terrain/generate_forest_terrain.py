@@ -35,6 +35,9 @@ Z /= Z.max()
 # Use 0.0 for exact terrain-surface placement.
 TREE_BASE_OFFSET = -0.3
 
+# Helicopter poses are measured from the local terrain surface, not from Z=0.
+HELICOPTER_CLEARANCE = 0.0
+
 
 def terrain_height_at(x, y, field=Z):
     x_norm = (x + SIZE_X / 2.0) / SIZE_X
@@ -99,6 +102,33 @@ def update_forest_world_tree_heights(world_file="src/fleet_simulation/worlds/for
 
     new_text = pattern.sub(repl, text)
 
+    if new_text != text:
+        with open(world_file, "w") as f:
+            f.write(new_text)
+
+
+def update_forest_world_helicopter_heights(
+    world_file="src/fleet_simulation/worlds/forest.sdf.in", field=Z
+):
+    """Keep helicopter targets at a fixed clearance above the generated terrain."""
+    with open(world_file, "r") as f:
+        text = f.read()
+
+    pattern = re.compile(
+        r"(<include><name>(?:apache_friend|ka52_enemy)_\d+</name><uri>"
+        r"model://(?:apache_friend|ka52_enemy)</uri><pose>)"
+        r"(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+"
+        r"(-?\d+(?:\.\d+)?)(\s+-?\d+(?:\.\d+)?\s+"
+        r"-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?</pose></include>)"
+    )
+
+    def repl(match):
+        x = float(match.group(2))
+        y = float(match.group(3))
+        z = terrain_height_at(x, y, field) * HEIGHT + HELICOPTER_CLEARANCE
+        return f"{match.group(1)}{x:.6f} {y:.6f} {z:.6f}{match.group(5)}"
+
+    new_text = pattern.sub(repl, text)
     if new_text != text:
         with open(world_file, "w") as f:
             f.write(new_text)
@@ -182,6 +212,7 @@ TREE_POSITIONS = [
 # Set TREE_BASE_OFFSET to 0.0 if you want the base to sit exactly on terrain.
 FOREST_TREE_BLOCK = generate_tree_config(TREE_POSITIONS, "model://pine_tree", "pine_c", Z)
 update_forest_world_tree_heights()
+update_forest_world_helicopter_heights()
 
 # Keep the mesh generation output quiet, but leave the terrain-aware tree logic in
 # the file so the world SDF can be generated from the mapping function directly.

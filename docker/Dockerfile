@@ -92,6 +92,10 @@ RUN pip install --break-system-packages --no-cache-dir \
 
 RUN pip install --break-system-packages --no-cache-dir "filterpy==1.4.5"
 
+# Jazzy's colcon setuptools install task invokes `setup.py develop --uninstall`.
+# Setuptools 80 removed that option, breaking ament_python package builds.
+RUN pip install --break-system-packages --no-cache-dir "setuptools<80"
+
 COPY docker/ros-workspace-exec /usr/local/bin/ros-workspace-exec
 RUN chmod 0755 /usr/local/bin/ros-workspace-exec
 

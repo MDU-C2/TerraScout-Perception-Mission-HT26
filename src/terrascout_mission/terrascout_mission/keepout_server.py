@@ -14,13 +14,14 @@ import rclpy
 from fleet_interfaces.srv import GetKeepoutZone, ListKeepoutZones, SetKeepoutZone
 from geometry_msgs.msg import Point32, PolygonStamped
 from nav2_msgs.srv import ClearEntireCostmap
+from foxglove_msgs.msg import GeoJSON
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import NavSatFix, PointCloud2, PointField
 from visualization_msgs.msg import Marker
 
 from fleet_common import signals
-from fleet_common.geodesy import llh_to_enu
+from fleet_common.geodesy import enu_to_llh, llh_to_enu
 from fleet_common.params import declare
 from fleet_common.qos import latched_qos
 from terrascout_mission.keepout_geometry import build_rectangle, finite, positive
@@ -111,6 +112,7 @@ class KeepoutServer(Node):
         self._zone_pub = self.create_publisher(PolygonStamped, self._zone_topic, latched_qos())
         self._obstacle_pub = self.create_publisher(PointCloud2, self._obstacle_topic, latched_qos())
         self._marker_pub = self.create_publisher(Marker, self._marker_topic, latched_qos())
+        self._geojson_pub = self.create_publisher(GeoJSON, "keepout_zones_geo", latched_qos())
         self._clear_local_costmap = self.create_client(
             ClearEntireCostmap, "local_costmap/clear_entirely_local_costmap"
         )
@@ -128,7 +130,9 @@ class KeepoutServer(Node):
             self._datum = msg
             self._restore_zones()
             self.get_logger().info(
-                f"datum locked from {self._datum_topic}: {msg.latitude:.7f},{msg.longitude:.7f}"
+                f"datum locked from {self._datum_topic}: "
+                f"lat={msg.latitude:.7f}, lon={msg.longitude:.7f}, "
+                f"alt={msg.altitude:.2f} m; map frame={self._global_frame}"
             )
 
     def _on_set_keepout_zone(self, request, response):
@@ -156,7 +160,7 @@ class KeepoutServer(Node):
             east, north, _ = llh_to_enu(
                 request.latitude,
                 request.longitude,
-                0.0,
+                self._datum.altitude,
                 self._datum.latitude,
                 self._datum.longitude,
                 self._datum.altitude,
@@ -188,7 +192,11 @@ class KeepoutServer(Node):
             action = "updated" if existed else "created"
             response.reason = (
                 f"zone '{request.label}' {action} at {request.latitude:.7f},{request.longitude:.7f} "
-                f"size {request.x_length:.2f}x{request.y_length:.2f} m yaw {request.yaw_deg:.1f} deg"
+                f"map ENU=({east:.2f},{north:.2f}) m; "
+                f"datum=({self._datum.latitude:.7f},{self._datum.longitude:.7f},"
+                f"{self._datum.altitude:.2f} m); frame={self._global_frame}; "
+                f"size {request.x_length:.2f}x{request.y_length:.2f} m "
+                f"yaw {request.yaw_deg:.1f} deg"
             )
             self.get_logger().info(response.reason)
             return response
@@ -271,6 +279,52 @@ class KeepoutServer(Node):
             )
         self._cached_obstacle_cloud = self._pointcloud(points)
         self._publish_cached_obstacles()
+        self._publish_keepout_geojson()
+
+    def _publish_keepout_geojson(self) -> None:
+        features = []
+        if self._datum is not None:
+            for zone in sorted(self._zones.values(), key=lambda item: item.label):
+                ring = []
+                for east, north in zone.polygon + [zone.polygon[0]]:
+                    latitude, longitude, _ = enu_to_llh(
+                        east,
+                        north,
+                        0.0,
+                        self._datum.latitude,
+                        self._datum.longitude,
+                        self._datum.altitude,
+                    )
+                    ring.append([longitude, latitude])
+                features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "name": zone.label,
+                        "x_length_m": zone.x_length,
+                        "y_length_m": zone.y_length,
+                        "yaw_deg": zone.yaw_deg,
+                        "style": {"color": "#8b2be2"},
+                    },
+                    "geometry": {"type": "Polygon", "coordinates": [ring]},
+                })
+                features.append({
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [zone.longitude, zone.latitude],
+                    },
+                    "properties": {
+                        "name": f"{zone.label} center",
+                        "metadata": {
+                            "lat": f"{zone.latitude:.8f}",
+                            "lon": f"{zone.longitude:.8f}",
+                        },
+                        "style": {"color": "#8b2be2"},
+                    },
+                })
+        message = GeoJSON()
+        message.geojson = json.dumps({"type": "FeatureCollection", "features": features})
+        self._geojson_pub.publish(message)
 
     def _publish_cached_obstacles(self) -> None:
         """Refresh cached static keepout points for Nav2's decaying voxel layer."""
@@ -315,13 +369,15 @@ class KeepoutServer(Node):
         label: str = "",
         action: int = Marker.ADD,
         marker_id: int = 0,
+        namespace: str = "keepout_zone",
+        marker_type: int = Marker.CUBE,
     ) -> Marker:
         marker = Marker()
         marker.header = self._header()
-        marker.ns = "keepout_zone"
+        marker.ns = namespace
         marker.id = marker_id
         marker.action = action
-        marker.type = Marker.CUBE
+        marker.type = marker_type
         marker.lifetime.sec = 0
 
         if action != Marker.ADD or zone is None:
@@ -331,19 +387,21 @@ class KeepoutServer(Node):
         center_y = sum(y for _, y in zone.polygon) / len(zone.polygon)
         yaw_rad = math.radians(zone.yaw_deg)
 
-        marker.scale.x = zone.x_length
-        marker.scale.y = zone.y_length
-        marker.scale.z = self._marker_height_m
         marker.pose.position.x = center_x
         marker.pose.position.y = center_y
-        marker.pose.position.z = self._marker_height_m * 0.5
-        marker.pose.orientation.z = math.sin(yaw_rad * 0.5)
-        marker.pose.orientation.w = math.cos(yaw_rad * 0.5)
-        marker.color.r = 1.0
-        marker.color.g = 0.2
-        marker.color.b = 0.2
-        marker.color.a = self._marker_alpha
-        marker.text = label
+        marker.pose.orientation.w = 1.0
+        if marker_type == Marker.CUBE:
+            marker.scale.x = zone.x_length
+            marker.scale.y = zone.y_length
+            marker.scale.z = self._marker_height_m
+            marker.pose.position.z = self._marker_height_m * 0.5
+            marker.pose.orientation.z = math.sin(yaw_rad * 0.5)
+            marker.pose.orientation.w = math.cos(yaw_rad * 0.5)
+            marker.color.r = 0.55
+            marker.color.g = 0.1
+            marker.color.b = 0.85
+            marker.color.a = self._marker_alpha
+            marker.text = label
         return marker
 
 

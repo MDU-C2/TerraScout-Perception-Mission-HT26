@@ -49,7 +49,7 @@ TARGETS: dict[str, Target] = {
     "sim-elevation-pc": replace(
         SIM,
         deployment="elevation-pc",
-        topology=Topology(uplink_address="130.243.66.211", uplink_interface="eno1"),
+        topology=Topology(uplink_address="10.132.135.87", uplink_interface="eno1"),
         features=Features(recording_enabled=False),
     ),
 

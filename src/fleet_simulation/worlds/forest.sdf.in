@@ -252,13 +252,13 @@
       <include><name>oak_o18</name><uri>model://oak_tree</uri><pose>30.600000 -9.350000 2.324870 0 0 0.000000</pose></include>
 
       <!-- Helicopter Targets (Apache Friendly & Ka-52 Enemy) for 2D Perception & Object Detection -->
-      <include><name>apache_friend_1</name><uri>model://apache_friend</uri><pose>3.5 0.0 5 0 0 3.14159</pose></include>
-      <include><name>ka52_enemy_1</name><uri>model://ka52_enemy</uri><pose>6.5 2.0 5 0 0 2.8</pose></include>
-      <include><name>apache_friend_2</name><uri>model://apache_friend</uri><pose>8.0 -2.5 5 0 0 3.5</pose></include>
-      <include><name>ka52_enemy_2</name><uri>model://ka52_enemy</uri><pose>12.0 1.0 5 0 0 3.14159</pose></include>
+      <include><name>apache_friend_1</name><uri>model://apache_friend</uri><pose>3.500000 0.000000 3.609782 0 0 3.14159</pose></include>
+      <include><name>ka52_enemy_1</name><uri>model://ka52_enemy</uri><pose>6.500000 2.000000 3.432071 0 0 2.8</pose></include>
+      <include><name>apache_friend_2</name><uri>model://apache_friend</uri><pose>8.000000 -2.500000 3.076848 0 0 3.5</pose></include>
+      <include><name>ka52_enemy_2</name><uri>model://ka52_enemy</uri><pose>12.000000 1.000000 3.245913 0 0 3.14159</pose></include>
       <!-- Reverse direction targets (behind robot, facing +X) -->
-      <include><name>apache_friend_3</name><uri>model://apache_friend</uri><pose>-4.0 1.5 5 0 0 0.0</pose></include>
-      <include><name>ka52_enemy_3</name><uri>model://ka52_enemy</uri><pose>-5.5 -1.5 5 0 0 0.0</pose></include>
+      <include><name>apache_friend_3</name><uri>model://apache_friend</uri><pose>-4.000000 1.500000 2.786792 0 0 0.0</pose></include>
+      <include><name>ka52_enemy_3</name><uri>model://ka52_enemy</uri><pose>-5.500000 -1.500000 2.742466 0 0 0.0</pose></include>
 
     </model>
 

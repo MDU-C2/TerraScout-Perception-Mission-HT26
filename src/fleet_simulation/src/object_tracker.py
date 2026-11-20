@@ -11,7 +11,7 @@ class ObjectTrack:
     def __init__(self, track_id, observation, timestamp, tracker):
         self.id = track_id
         self.obj_class = observation['class_id']
-        self.observations = 1
+        self.observations = 5
         self.last_seen = float(timestamp)
         self.last_predicted = float(timestamp)
         self.min_observations = tracker.min_observations
