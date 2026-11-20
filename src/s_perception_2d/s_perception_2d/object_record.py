@@ -1,14 +1,3 @@
-"""
-ObjectRecord representation and perception validation handler.
-
-Pipeline stage:
-RGB image -> YOLOv8n inference -> Detection (raw bbox, class, conf)
-          -> Perception-system validation and record handling
-          -> ObjectRecord:
-             ├── Configured class, when supported
-             └── "unknown", when the record cannot be assigned to a configured class
-"""
-
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Dict, Any, Optional
 import time
@@ -16,7 +5,6 @@ import time
 try:
     from vision_msgs.msg import Detection2D, ObjectHypothesisWithPose
 except ImportError:
-    # Allows usage outside ROS environment during pure unit tests
     Detection2D = None
     ObjectHypothesisWithPose = None
 
@@ -26,12 +14,12 @@ class ObjectRecord:
     """
     Validated detection record produced by the perception system.
     """
-    # Assigned class: either one of the configured supported classes or "unknown"
+    # Assigned class
     class_name: str
     raw_class_name: str
     confidence: float
 
-    # Bounding box coordinates: [x1, y1, x2, y2]
+    # Bounding box coordinates
     x1: float
     y1: float
     x2: float
@@ -118,16 +106,16 @@ class ObjectRecordHandler:
         self,
         configured_classes: Optional[List[str]] = None,
         confidence_threshold: float = 0.50,
-        min_noise_threshold: float = 0.15,
         min_box_size_px: float = 8.0,
         allow_unknown_records: bool = True,
+        max_aspect_ratio_h_w: float = 1.3,
     ):
         """
         :param configured_classes: List of supported class names.
         :param confidence_threshold: Threshold >= confidence_threshold accepts configured class.
-        :param min_noise_threshold: Detections <= min_noise_threshold are ignored as noise.
         :param min_box_size_px: Minimum width and height for a valid box.
-        :param allow_unknown_records: If True, unsupported or low-confidence classes become 'unknown'.
+        :param allow_unknown_records: If True, unsupported classes become 'unknown' (PER-05).
+        :param max_aspect_ratio_h_w: Maximum allowed Height / Width ratio (rejects vertical tree trunks).
         """
         if configured_classes is None:
             self.configured_classes = set(self.DEFAULT_CONFIGURED_CLASSES)
@@ -135,9 +123,9 @@ class ObjectRecordHandler:
             self.configured_classes = set(configured_classes)
 
         self.confidence_threshold = float(confidence_threshold)
-        self.min_noise_threshold = float(min_noise_threshold)
         self.min_box_size_px = float(min_box_size_px)
         self.allow_unknown_records = bool(allow_unknown_records)
+        self.max_aspect_ratio_h_w = float(max_aspect_ratio_h_w)
 
     def validate_and_create_record(
         self,
@@ -151,10 +139,8 @@ class ObjectRecordHandler:
     ) -> ObjectRecord:
         """
         Validates raw detection and creates an ObjectRecord.
-        Implements 3-tier confidence logic:
-        - conf >= confidence_threshold: Accept configured class
-        - min_noise_threshold < conf < confidence_threshold: Override label to 'unknown'
-        - conf <= min_noise_threshold: Discard completely as noise
+        - conf >= confidence_threshold: Accept configured class, or 'unknown' if unconfigured (PER-05)
+        - conf < confidence_threshold: Discard as LOW_CONFIDENCE noise
         """
         x1, y1, x2, y2 = float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])
         conf = float(confidence)
@@ -168,24 +154,27 @@ class ObjectRecordHandler:
         is_valid = True
         status_reasons = []
 
-        # 1. Noise threshold check: if <= min_noise_threshold, reject completely
-        if conf <= self.min_noise_threshold:
+        # 1. Confidence check
+        if conf < self.confidence_threshold:
             is_valid = False
-            status_reasons.append("NOISE_BELOW_MIN_THRESHOLD")
+            status_reasons.append("LOW_CONFIDENCE")
 
         # 2. Geometric box validation
         if width < self.min_box_size_px or height < self.min_box_size_px:
             is_valid = False
             status_reasons.append("BOX_TOO_SMALL")
 
+        # Geometric aspect ratio filter
+        if width > 0 and height > self.max_aspect_ratio_h_w * width:
+            is_valid = False
+            status_reasons.append("ASPECT_RATIO_REJECTED")
+
         if img_width is not None and img_height is not None:
             if x2 <= 0 or y2 <= 0 or x1 >= img_width or y1 >= img_height:
                 is_valid = False
                 status_reasons.append("OUT_OF_BOUNDS")
 
-        # 3. 3-tier confidence classification & Class assignment:
-        # Tier 1: conf >= confidence_threshold -> Accept class if in configured_classes
-        # Tier 2: min_noise_threshold < conf < confidence_threshold -> Override to 'unknown'
+        # 3. Class assignment & PER-05:
         assigned_class: str
         if conf >= self.confidence_threshold:
             if raw_class_name in self.configured_classes:
@@ -197,14 +186,6 @@ class ObjectRecordHandler:
                     status_reasons.append("UNCONFIGURED_CLASS_REJECTED")
                 else:
                     status_reasons.append("ASSIGNED_UNKNOWN")
-        elif conf > self.min_noise_threshold:
-            # Low confidence but above noise: override to unknown
-            assigned_class = "unknown"
-            if not self.allow_unknown_records:
-                is_valid = False
-                status_reasons.append("LOW_CONFIDENCE_REJECTED")
-            else:
-                status_reasons.append("LOW_CONFIDENCE_OVERRIDE_UNKNOWN")
         else:
             assigned_class = "unknown"
 

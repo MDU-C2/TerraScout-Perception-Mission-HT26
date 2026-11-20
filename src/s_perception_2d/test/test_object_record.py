@@ -1,7 +1,3 @@
-"""
-Unit tests for ObjectRecord and ObjectRecordHandler.
-"""
-
 import pytest
 from s_perception_2d.object_record import ObjectRecord, ObjectRecordHandler
 
@@ -10,13 +6,13 @@ def test_configured_class_assignment():
     handler = ObjectRecordHandler(
         configured_classes=["Apache friendly", "Ka-52 Enemy"],
         confidence_threshold=0.50,
-        min_noise_threshold=0.15,
+        max_aspect_ratio_h_w=1.3,
     )
 
     record = handler.validate_and_create_record(
         raw_class_name="Apache friendly",
         confidence=0.88,
-        xyxy=(100.0, 150.0, 300.0, 450.0),
+        xyxy=(100.0, 150.0, 400.0, 350.0),
         frame_id="oakd_rgb_camera_optical_frame",
     )
 
@@ -26,12 +22,12 @@ def test_configured_class_assignment():
     assert record.confidence == 0.88
     assert record.x1 == 100.0
     assert record.y1 == 150.0
-    assert record.x2 == 300.0
-    assert record.y2 == 450.0
-    assert record.center_u == 200.0
-    assert record.center_v == 300.0
-    assert record.width == 200.0
-    assert record.height == 300.0
+    assert record.x2 == 400.0
+    assert record.y2 == 350.0
+    assert record.center_u == 250.0
+    assert record.center_v == 250.0
+    assert record.width == 300.0
+    assert record.height == 200.0
     assert record.validation_status == "VALID"
 
 
@@ -39,7 +35,6 @@ def test_unknown_fallback_for_unsupported_class():
     handler = ObjectRecordHandler(
         configured_classes=["Apache friendly", "Ka-52 Enemy"],
         confidence_threshold=0.50,
-        min_noise_threshold=0.15,
         allow_unknown_records=True,
     )
 
@@ -57,32 +52,31 @@ def test_unknown_fallback_for_unsupported_class():
     assert "ASSIGNED_UNKNOWN" in record.validation_status
 
 
-def test_confidence_three_tier_logic():
+def test_confidence_rejection():
     handler = ObjectRecordHandler(
         configured_classes=["Apache friendly", "Ka-52 Enemy"],
         confidence_threshold=0.50,
-        min_noise_threshold=0.15,
+        max_aspect_ratio_h_w=1.3,
     )
 
-    # 1. Low confidence (0.15 < conf < 0.50) -> overrides to unknown, remains valid for publishing
+    # 1. Low confidence (< 0.50) is rejected as noise
     rec_low = handler.validate_and_create_record(
         raw_class_name="Apache friendly",
         confidence=0.30,
-        xyxy=(10.0, 10.0, 100.0, 100.0),
+        xyxy=(10.0, 10.0, 100.0, 80.0),
     )
-    assert rec_low.is_valid is True
-    assert rec_low.class_name == "unknown"
-    assert rec_low.raw_class_name == "Apache friendly"
-    assert rec_low.validation_status == "LOW_CONFIDENCE_OVERRIDE_UNKNOWN"
+    assert rec_low.is_valid is False
+    assert "LOW_CONFIDENCE" in rec_low.validation_status
 
-    # 2. Noise floor (conf <= 0.15) -> completely rejected
-    rec_noise = handler.validate_and_create_record(
+    # 2. Acceptable confidence
+    rec_ok = handler.validate_and_create_record(
         raw_class_name="Apache friendly",
-        confidence=0.10,
-        xyxy=(10.0, 10.0, 100.0, 100.0),
+        confidence=0.55,
+        xyxy=(10.0, 10.0, 100.0, 80.0),
     )
-    assert rec_noise.is_valid is False
-    assert rec_noise.validation_status == "NOISE_BELOW_MIN_THRESHOLD"
+    assert rec_ok.is_valid is True
+    assert rec_ok.class_name == "Apache friendly"
+    assert rec_ok.validation_status == "VALID"
 
 
 def test_box_size_validation():
@@ -156,3 +150,30 @@ def test_to_ros_detection2d():
     assert len(ros_det.results) == 1
     assert ros_det.results[0].hypothesis.class_id == "Ka-52 Enemy"
     assert pytest.approx(ros_det.results[0].hypothesis.score, 0.001) == 0.92
+
+
+def test_aspect_ratio_rejection():
+    handler = ObjectRecordHandler(
+        configured_classes=["Apache friendly", "Ka-52 Enemy"],
+        confidence_threshold=0.50,
+        max_aspect_ratio_h_w=1.3,
+    )
+
+    # Vertical box (e.g. tree trunk: width=50, height=150 -> ratio=3.0 > 1.3)
+    rec_vertical = handler.validate_and_create_record(
+        raw_class_name="Ka-52 Enemy",
+        confidence=0.85,
+        xyxy=(100.0, 100.0, 150.0, 250.0),
+    )
+    assert rec_vertical.is_valid is False
+    assert "ASPECT_RATIO_REJECTED" in rec_vertical.validation_status
+
+    # Horizontal box
+    rec_horizontal = handler.validate_and_create_record(
+        raw_class_name="Ka-52 Enemy",
+        confidence=0.85,
+        xyxy=(100.0, 100.0, 250.0, 200.0),
+    )
+    assert rec_horizontal.is_valid is True
+    assert rec_horizontal.class_name == "Ka-52 Enemy"
+    assert rec_horizontal.validation_status == "VALID"

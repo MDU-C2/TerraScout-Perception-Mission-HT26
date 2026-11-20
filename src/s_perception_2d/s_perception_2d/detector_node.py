@@ -1,26 +1,4 @@
 #!/usr/bin/env python3
-"""
-ROS 2 YOLOv8 2D Object Detector Node.
-
-Subscribes:
-  - Input RGB camera image (sensor_msgs/msg/Image) on /oakd/rgb/image_raw
-
-Inference:
-  - YOLOv8 object detection on incoming frames using trained model (best.pt)
-
-Validation & Record Handling:
-  - Perception-system validation & ObjectRecord pipeline:
-    * Confidence threshold check
-    * Geometric bounding box validation (center u, v, size_x, size_y)
-    * Configured class assignment vs 'unknown' fallback
-
-Publishes:
-  - 2D Bounding boxes & hypotheses (vision_msgs/msg/Detection2DArray) on /oakd/detections_2d
-  - (Optional) Annotated debug image (sensor_msgs/msg/Image) on /oakd/detections_image
-
-Logging:
-  - ObjectRecord detection logs to JSONL files
-"""
 import os
 import sys
 import time
@@ -80,10 +58,10 @@ class YoloDetectorNode(Node):
     def __init__(self):
         super().__init__("yolo_detector_node")
 
-        # ---------------- Parameters Declaration ----------------
+        # Parameters Declaration
         self._declare_param("model_path", "")
         self._declare_param("confidence_threshold", 0.50)
-        self._declare_param("min_noise_threshold", 0.15)
+        self._declare_param("max_aspect_ratio_h_w", 1.3)
         self._declare_param("iou_threshold", 0.45)
         self._declare_param("input_image_topic", "oakd/rgb/image_raw")
         self._declare_param("output_detections_topic", "oakd/detections_2d")
@@ -101,10 +79,10 @@ class YoloDetectorNode(Node):
         self._declare_param("qos_reliability", "best_effort")  # "best_effort" or "reliable"
         self._declare_param("target_fps", 5.0)  # Processing rate limit in Hz to prevent CPU starvation
 
-        # ---------------- Retrieve Parameters ----------------
+        # Retrieve Parameters
         model_path_param = self.get_parameter("model_path").get_parameter_value().string_value
         self.conf_threshold = float(self.get_parameter("confidence_threshold").value)
-        self.min_noise_threshold = float(self.get_parameter("min_noise_threshold").value)
+        self.max_aspect_ratio_h_w = float(self.get_parameter("max_aspect_ratio_h_w").value)
         self.iou_threshold = float(self.get_parameter("iou_threshold").value)
         self.input_image_topic = self.get_parameter("input_image_topic").value
         self.output_detections_topic = self.get_parameter("output_detections_topic").value
@@ -137,14 +115,14 @@ class YoloDetectorNode(Node):
         self.model_classes = self.model.names if hasattr(self.model, "names") else {}
         self.get_logger().info(f"Model classes: {self.model_classes}")
         self.get_logger().info(f"Configured supported classes: {self.configured_classes}")
-        self.get_logger().info(f"Confidence threshold: {self.conf_threshold}, Min noise threshold: {self.min_noise_threshold}")
+        self.get_logger().info(f"Confidence threshold: {self.conf_threshold}")
 
         # Initialize ObjectRecordHandler & PerceptionLogger
         self.record_handler = ObjectRecordHandler(
             configured_classes=self.configured_classes,
             confidence_threshold=self.conf_threshold,
-            min_noise_threshold=self.min_noise_threshold,
             allow_unknown_records=self.allow_unknown_records,
+            max_aspect_ratio_h_w=self.max_aspect_ratio_h_w,
         )
         self.logger_handler = PerceptionLogger(
             log_dir=self.log_dir,
@@ -154,7 +132,7 @@ class YoloDetectorNode(Node):
         self.bridge = CvBridge()
         self.frame_count = 0
 
-        # Configure QoS profile: Best-effort subscriber receives from both
+        # Best-effort subscriber receives from both
         # best-effort (e.g. Gazebo ROS bridge) and reliable publishers.
         if qos_rel_param == "reliable":
             reliability = ReliabilityPolicy.RELIABLE
@@ -168,7 +146,7 @@ class YoloDetectorNode(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
 
-        # ---------------- Subscriptions & Publishers ----------------
+        # Subscriptions & Publishers
         self.sub_image = self.create_subscription(
             Image,
             self.input_image_topic,
@@ -261,11 +239,11 @@ class YoloDetectorNode(Node):
 
         h, w, _ = cv_image.shape
 
-        # ---------------- Inference ----------------
+        # Inference
         try:
             results = self.model.predict(
                 source=cv_image,
-                conf=self.min_noise_threshold,
+                conf=self.conf_threshold,
                 iou=self.iou_threshold,
                 imgsz=self.inference_imgsz,
                 verbose=False,
@@ -278,7 +256,7 @@ class YoloDetectorNode(Node):
             try:
                 results = self.model.predict(
                     source=cv_image,
-                    conf=self.min_noise_threshold,
+                    conf=self.conf_threshold,
                     iou=self.iou_threshold,
                     imgsz=self.inference_imgsz,
                     verbose=False,
@@ -291,7 +269,7 @@ class YoloDetectorNode(Node):
             self.get_logger().error(f"Inference error: {e}")
             return
 
-        # ---------------- Validation & Record Handling ----------------
+        # Validation & Record Handling
         object_records: List[ObjectRecord] = []
         detection_array_msg = Detection2DArray()
         detection_array_msg.header = msg.header
@@ -327,10 +305,10 @@ class YoloDetectorNode(Node):
                         f"bbox=[{record.x1:.0f}, {record.y1:.0f}, {record.x2:.0f}, {record.y2:.0f}]"
                     )
 
-        # ---------------- Publish Detections ----------------
+        # Publish Detections
         self.pub_detections.publish(detection_array_msg)
 
-        # ---------------- Log Detection Records ----------------
+        # Log Detection Records
         stamp_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         self.logger_handler.log_frame_detections(
             frame_id=msg.header.frame_id,
@@ -339,7 +317,7 @@ class YoloDetectorNode(Node):
             image_shape=(h, w),
         )
 
-        # ---------------- Publish Annotated Image (Only if subscribers exist) ----------------
+        # Publish Annotated Image (Only if subscribers exist)
         if self.publish_annotated_image and self.pub_annotated is not None:
             if self.pub_annotated.get_subscription_count() > 0:
                 self._publish_annotated_frame(cv_image, object_records, msg.header)

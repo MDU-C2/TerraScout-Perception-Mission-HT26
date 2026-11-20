@@ -16,7 +16,6 @@ def test_perception_logger(tmp_path: Path):
     handler = ObjectRecordHandler(
         configured_classes=["Apache friendly", "Ka-52 Enemy"],
         confidence_threshold=0.50,
-        min_noise_threshold=0.15,
     )
 
     rec1 = handler.validate_and_create_record("Apache friendly", 0.90, (10, 10, 50, 50), "frame_1")

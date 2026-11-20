@@ -1,31 +1,27 @@
-# Configuration parameters for SAGE s_perception_2d YOLO detector
 
 /**:
   ros__parameters:
     # Model configuration
-    model_path: ""                       # Empty string auto-discovers package share models/best.pt
-    device: "auto"                        # "auto" (uses CUDA if available, CPU otherwise), "cuda:0", or "cpu"
-    inference_imgsz: 1280
+    model_path: ""
+    device: "auto"
+    inference_imgsz: 640
 
     # Detection thresholds & processing rate
-    confidence_threshold: 0.50            # Threshold >= 0.50 accepts configured class
-    min_noise_threshold: 0.15             # Detections below 0.15 are ignored completely (noise)
-    iou_threshold: 0.45                   # NMS IoU threshold
-    target_fps: 5.0                       # Maximum inference rate (Hz) to prevent CPU starvation and queue lag
+    confidence_threshold: 0.35
+    max_aspect_ratio_h_w: 1.5
+    iou_threshold: 0.45
+    target_fps: 5.0
 
-    # Topics (relative to node namespace so it automatically binds to the robot oakd topics)
     input_image_topic: "oakd/rgb/image_raw"
     output_detections_topic: "oakd/detections_2d"
     publish_annotated_image: true
     annotated_image_topic: "oakd/detections_image"
-    qos_reliability: "best_effort"        # "best_effort" (compatible with Gazebo camera) or "reliable"
+    qos_reliability: "best_effort"
 
-    # Perception record validation & class handling
-    # Supported configured classes from trained YOLO model:
     configured_classes:
       - "Apache friendly"
       - "Ka-52 Enemy"
-    allow_unknown_records: true           # If confidence is between 0.15 and 0.50, label is overridden to 'unknown'
+    allow_unknown_records: true           
 
     # Logging
     enable_file_logging: true
