@@ -823,21 +823,22 @@ def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
             )
         )
 
-    # Enemy reader always runs on the PC in simulation
+    #TODO remove condition.
+    # Object localization currently runs only in simulation
     if unit.mode == SIMULATION:
 
         # When YOLO is offloaded, do not wait for a local YOLO process
-        enemy_reader_after = after if jetson_yolo else [YOLO_DETECTOR]
+        object_localization_after = after if jetson_yolo else [YOLO_DETECTOR]
 
         processes.append(
             node(
-                "enemy_reader",
+                "object_localization",
                 package=OBJECT_LOCALIZATION_PACKAGE,
-                executable="enemy_reader.py",
-                node_name="enemy_reader",
+                executable="object_localization_node.py",
+                node_name="object_localization",
                 namespace=unit.namespace,
-                after=enemy_reader_after,
-                ready=NodeProbe(f"/{unit.namespace}/enemy_reader"),
+                after=object_localization_after,
+                ready=NodeProbe(f"/{unit.namespace}/object_localization"),
                 output="log",
             )
         )

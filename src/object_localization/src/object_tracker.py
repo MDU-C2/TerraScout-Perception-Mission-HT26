@@ -106,33 +106,21 @@ class ObjectTracker:
     #TODO, motivate/verify
     def __init__(
         self,
-        min_observations=5,
-        initial_std=0.5,
-        measurement_std=0.20,
-        process_std_per_sqrt_second=0.01,
-        chi2_gate_3d= 7.815,   # 95% chi-square, 3 degrees of freedom
-        max_physical_distance=2.0,
-        confirmation_score=4.0,
-        max_expected_misses=4,
-        min_miss_interval=1.0,
-        min_visible_distance=0.8,
-        max_visible_distance=6.0,
-        frame_margin=0.12,
     ):
         self.tracks = []
         self.next_id = 1
-        self.min_observations = int(min_observations)
-        self.initial_std = float(initial_std)
-        self.measurement_std = float(measurement_std)
-        self.process_std_per_sqrt_second = float(process_std_per_sqrt_second)
-        self.chi2_gate_3d = float(chi2_gate_3d)
-        self.max_physical_distance = float(max_physical_distance)
-        self.confirmation_score = float(confirmation_score)
-        self.max_expected_misses = int(max_expected_misses)
-        self.min_miss_interval = float(min_miss_interval)
-        self.min_visible_distance = float(min_visible_distance)
-        self.max_visible_distance = float(max_visible_distance)
-        self.frame_margin = float(frame_margin)
+        self.min_observations = 5
+        self.initial_std = 0.5
+        self.measurement_std = 0.20
+        self.process_std_per_sqrt_second = 0.01
+        self.chi2_gate_3d = 7.815   # 95% chi-square, 3 degrees of freedom
+        self.max_physical_distance = 2.0
+        self.confirmation_score = 4.0
+        self.max_expected_misses = 4
+        self.min_miss_interval = 1.0
+        self.min_visible_distance = 0.8
+        self.max_visible_distance = 6.0
+        self.frame_margin = 0.12
         self.new_track_cost = 7.815
         self.missed_track_cost = 7.815
 

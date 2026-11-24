@@ -4,7 +4,7 @@ project(object_localization)
 find_package(ament_cmake REQUIRED)
 
 install(PROGRAMS
-  src/enemy_reader.py
+  src/object_localization_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
