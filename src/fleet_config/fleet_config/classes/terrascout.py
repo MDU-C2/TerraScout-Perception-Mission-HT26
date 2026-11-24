@@ -61,6 +61,7 @@ NAVIGATION_PACKAGE = "terrascout_navigation"
 HARDWARE_PACKAGE = "terrascout_hardware"
 MISSION_PACKAGE = "terrascout_mission"
 SIMULATION_PACKAGE = "fleet_simulation"
+OBJECT_LOCALIZATION_PACKAGE = "object_localization"
 FAST_LIO = "fast_lio"
 
 PERCEPTION_PACKAGE = "s_perception_2d"
@@ -831,7 +832,7 @@ def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
         processes.append(
             node(
                 "enemy_reader",
-                package=SIMULATION_PACKAGE,
+                package=OBJECT_LOCALIZATION_PACKAGE,
                 executable="enemy_reader.py",
                 node_name="enemy_reader",
                 namespace=unit.namespace,

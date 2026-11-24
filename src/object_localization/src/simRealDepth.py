@@ -22,6 +22,7 @@ def simRealDepth(perfect_cloud):
 
     noisy = perfect_cloud.copy()
 
+    #Will add both random and systematic depth error
     # Gazebo's sensor is attached to oakd_link (base FLU); forward depth is +X.
     disparities = focalLengthPixel * baseline / noisy[:, :, 0]
     disparities += np.random.normal(noiseMean, noiseSigma, size=disparities.shape)
