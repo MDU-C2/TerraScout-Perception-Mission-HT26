@@ -255,9 +255,11 @@ class EnemyReader(Node):
         if ownPointCloudNoise:
             points = simRealDepth(points)
 
-        #TODO, move this perhaps?
+        #TODO, CALIBRATE
         #Inverse formula, to retain the old depth Z, from the noise depth Z'
         #Z = Z' / (1 − 0.00414·Z') # Taken from parameters in: simRealDepth.py
+        points[:, :, 0] = points[:, :, 0] / (1 - 0.00414 * points[:, :, 0])
+
 
         #get image seen by YOLO
         detection_time = self.message_time(detections_msg.header.stamp)
