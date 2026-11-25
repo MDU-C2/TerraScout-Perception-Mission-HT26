@@ -9,6 +9,7 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   terrascout_navigation/fast_lio_odom.py
   terrascout_navigation/gnss_shim.py
+  terrascout_navigation/gnss_alignment_shadow.py
   terrascout_navigation/scripts/compare_fast_lio_gt.py
   terrascout_navigation/scripts/report_mission_bag.py
   terrascout_navigation/scripts/process_mission_recording.py
@@ -32,6 +33,12 @@ if(BUILD_TESTING)
   ament_add_pytest_test(
     test_lidar_filter
     test/test_lidar_filter.py
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
+  )
+
+  ament_add_pytest_test(
+    test_gnss_alignment_shadow
+    test/test_gnss_alignment_shadow.py
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
   )
 

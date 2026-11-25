@@ -38,9 +38,9 @@ def fleet_errors(fleet: Fleet) -> list[str]:
             )
     if fleet.mode == PHYSICAL:
         for group in fleet.groups.values():
-            if group.id_override != fleet.name:
+            if group.id_override is None:
                 errors.append(
-                    f"physical target key {fleet.name} must match robot id {group.id_override}"
+                    f"physical target {fleet.name} must specify a robot id"
                 )
     seen_ids: dict[str, list[str]] = {}
     seen_vehicles: dict[int, list[str]] = {}

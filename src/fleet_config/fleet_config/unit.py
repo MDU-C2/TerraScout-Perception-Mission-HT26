@@ -73,6 +73,7 @@ class UnitContext:
     simulation: Simulation | None = None
     gz_resource_paths: tuple[str, ...] = ()
     site: Mapping[str, str] = MappingProxyType({})
+    deployment: str = "combined"
 
     @property
     def on_fleet_host(self) -> bool:
@@ -298,6 +299,7 @@ def contexts(
                 topology=robot.topology,
                 simulation=robot.simulation,
                 site=fleet.site,
+                deployment=fleet.deployment,
             )
         )
     if fleet.simulation is not None:

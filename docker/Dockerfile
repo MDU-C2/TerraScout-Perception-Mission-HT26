@@ -193,6 +193,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     "ros-${ROS_DISTRO}-diff-drive-controller" \
     "ros-${ROS_DISTRO}-joint-state-broadcaster" \
     "ros-${ROS_DISTRO}-microstrain-inertial-driver" \
+    "ros-${ROS_DISTRO}-pcl-ros" \
     libapr1-dev \
     libaprutil1-dev \
     libyaml-cpp-dev \

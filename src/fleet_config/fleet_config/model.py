@@ -127,6 +127,12 @@ class Simulation:
 class Features:
     recording_enabled: bool = False
     madum_enabled: bool = False
+    # Prepared for FAST-LIO2 handover, but not enabled on any target yet.
+    isolate_drive_odometry: bool = False
+    # Isolate Fixposition TF only on the explicitly selected physical target.
+    isolate_fixposition_tf: bool = False
+    # One opt-in for all localization TF and odometry owners. OFF by default.
+    experimental_localization_handover: bool = False
 
 
 @dataclass(frozen=True)
@@ -242,6 +248,7 @@ class PhysicalTarget:
     robot_class: RobotClass
     id: str
     features: Features = Features()
+    deployment: str = "combined"
 
     def fleet(self, name: str) -> Fleet:
         site = read_site(self.id)
@@ -258,6 +265,7 @@ class PhysicalTarget:
             groups=MappingProxyType({"self": RobotGroup(self.robot_class, 1, id_override=self.id)}),
             station=None,
             site=site,
+            deployment=self.deployment,
         )
 
 

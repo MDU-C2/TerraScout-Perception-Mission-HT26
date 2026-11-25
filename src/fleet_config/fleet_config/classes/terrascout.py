@@ -404,6 +404,86 @@ def fast_lio_simulation(unit: UnitContext) -> Process:
     )
 
 
+def fast_lio_physical(unit: UnitContext) -> Process:
+    namespace = unit.namespace
+
+    return node(
+        FAST_LIO,
+        package="fast_lio",
+        executable="fastlio_mapping",
+        node_name="laser_mapping",
+        namespace=namespace,
+
+        params=(params_path("fast_lio_physical.yaml"),),
+
+        urdf_extrinsics=UrdfExtrinsics(
+            description=robot_description(unit),
+            target_frame="microstrain_imu_link",
+            source_frame="lidar_link",
+        ),
+
+        param_values={
+            "common.lid_topic": f"/{namespace}/lidar_points_raw",
+            "common.imu_topic": f"/{namespace}/microstrain/imu/data",
+        },
+
+        remaps=merged(
+            TF_REMAPS,
+            {
+                "/cloud_registered": "fast_lio/cloud_registered",
+                "/cloud_registered_body": "fast_lio/cloud_registered_body",
+                "/cloud_effected": "fast_lio/cloud_effected",
+                "/Laser_map": "fast_lio/laser_map",
+                "/Odometry": "fast_lio/odometry",
+                "/path": "fast_lio/path",
+            },
+        ),
+
+        after=(LIDAR_NAME, "imu_aux"),
+
+        ready=MessageProbe(
+            f"/{namespace}/fast_lio/odometry"
+        ),
+    )
+
+
+def gnss_alignment_shadow(unit: UnitContext) -> Process:
+    return node(
+        "gnss_alignment_shadow",
+        package=NAVIGATION_PACKAGE,
+        executable="gnss_alignment_shadow.py",
+        node_name="gnss_alignment_shadow",
+        namespace=unit.namespace,
+        param_values={
+            "max_pair_dt_s": 0.15,
+            "max_horizontal_std_m": 5.0,
+            "alignment_smoothing_tau_s": 2.0,
+            "alignment_max_translation_speed_m_s": 0.2,
+            "alignment_max_rotation_speed_deg_s": 5.0,
+            "alignment_max_update_dt_s": 0.2,
+            "alignment_tf_preview_rate_hz": 20.0,
+            "fast_lio_watchdog_timeout_s": 1.0,
+            "publish_live_tf": unit.resolved_robot().features.experimental_localization_handover,
+            "max_status_dt_s": 1.0,
+            "max_position_residual_m": 1.0,
+            "max_yaw_residual_deg": 5.0,
+            "reacquire_after_s": 2.0,
+            "reacquire_min_samples": 5,
+            "reacquire_min_duration_s": 0.5,
+            "reacquire_after_rejections": 5,
+            "reacquire_min_rejection_duration_s": 1.0,
+            "reacquire_max_position_spread_m": 0.75,
+            "reacquire_max_yaw_spread_deg": 5.0,
+        },
+        remaps=TF_REMAPS,
+        after=(FAST_LIO, "gnss"),
+        ready=NodeProbe(
+            f"/{unit.namespace}/gnss_alignment_shadow"
+        ),
+        output="log",
+    )
+
+
 def fast_lio_odom_adapter(unit: UnitContext, after: list[str]) -> Process:
     return node(
         "fast_lio_odom_adapter",
@@ -415,6 +495,32 @@ def fast_lio_odom_adapter(unit: UnitContext, after: list[str]) -> Process:
         remaps=TF_REMAPS,
         after=after,
         ready=MessageProbe(f"/{unit.namespace}/odom"),
+        output="log",
+    )
+
+
+def fast_lio_odom_preview(unit: UnitContext) -> Process:
+    """FAST-LIO2 odometry stays private until the coordinated handover."""
+    handover = unit.resolved_robot().features.experimental_localization_handover
+    process_name = "fast_lio_odom_live" if handover else "fast_lio_odom_preview"
+    remaps = (
+        merged(TF_REMAPS, {"odom": "odom"})
+        if handover
+        else merged(TF_REMAPS, {
+            "odom": "fast_lio/odom_preview",
+            "/tf": "fast_lio/odom_tf_preview",
+        })
+    )
+    return node(
+        process_name,
+        package=NAVIGATION_PACKAGE,
+        executable="fast_lio_odom.py",
+        node_name=process_name,
+        namespace=unit.namespace,
+        param_values={"velocity_smoothing_alpha": 0.35},
+        remaps=remaps,
+        after=(FAST_LIO, ROBOT_STATE_PUBLISHER),
+        ready=NodeProbe(f"/{unit.namespace}/{process_name}"),
         output="log",
     )
 
@@ -441,6 +547,24 @@ def ground_segmentation(unit: UnitContext, after: list[str]) -> Process:
         after=[*after, filter_name],
         output="log" if unit.mode == SIMULATION else "screen",
         ready=MessageProbe(f"/{unit.namespace}/obstacle_points"),
+    )
+
+
+def fixposition_tf_remaps(unit: UnitContext) -> dict[str, str]:
+    """Opt in to private Fixposition TF only through target-specific Features.
+
+    Do not use site.yaml for this switch: terrascout1 and terrascout-physical
+    share the same robot site values. Keep Nav2 TF live until the handover.
+    """
+    features = unit.resolved_robot().features
+    if not (features.isolate_fixposition_tf or features.experimental_localization_handover):
+        return dict(TF_REMAPS)
+    return merged(
+        TF_REMAPS,
+        {
+            "/tf": "fixposition/tf_isolated",
+            "/tf_static": "fixposition/tf_static_isolated",
+        },
     )
 
 
@@ -477,7 +601,7 @@ def gnss_processes(unit: UnitContext, after: list[str]) -> list[Process]:
             node_name="gnss",
             namespace=unit.namespace,
             params=(params_path("gnss.yaml"),),
-            remaps=TF_REMAPS,
+            remaps=fixposition_tf_remaps(unit),
             after=after,
             ready=MessageProbe(f"/{unit.namespace}/{POSITION_TOPIC}"),
         )
@@ -555,6 +679,22 @@ def clock_sync(after: list[str]) -> Process:
     )
 
 
+def drive_controller_remaps(unit: UnitContext) -> dict[str, str]:
+    """Keep wheel odometry on /odom until the coordinated LIO handover.
+
+    The feature flag is target-scoped (not a shared site.yaml setting).
+    """
+    features = unit.resolved_robot().features
+    isolated = features.isolate_drive_odometry or features.experimental_localization_handover
+    return merged(
+        TF_REMAPS,
+        {
+            f"{DIFF_DRIVE_CONTROLLER}/cmd_vel": "cmd_vel",
+            f"{DIFF_DRIVE_CONTROLLER}/odom": "drive/odom" if isolated else "odom",
+        },
+    )
+
+
 def ros2_control_processes(unit: UnitContext) -> list[Process]:
     if unit.mode != PHYSICAL:
         return []
@@ -565,13 +705,7 @@ def ros2_control_processes(unit: UnitContext) -> list[Process]:
             executable="ros2_control_node",
             namespace=unit.namespace,
             params=(CONTROLLERS_PARAMS,),
-            remaps=merged(
-                TF_REMAPS,
-                {
-                    f"{DIFF_DRIVE_CONTROLLER}/cmd_vel": "cmd_vel",
-                    f"{DIFF_DRIVE_CONTROLLER}/odom": "odom",
-                },
-            ),
+            remaps=drive_controller_remaps(unit),
             robot_description=robot_description(unit),
             after=(ROBOT_STATE_PUBLISHER,),
             ready=NodeProbe(f"/{unit.namespace}/{CONTROLLER_MANAGER}"),
@@ -843,7 +977,28 @@ def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
 
     return processes
 
+def validate_localization_handover(unit: UnitContext) -> bool:
+    """Reject partial or nonphysical handovers before rendering processes.
+
+    The opt-in lives on the target's Features, never in shared site.yaml.
+    """
+    features = unit.resolved_robot().features
+    handover = features.experimental_localization_handover
+    if handover and unit.mode != PHYSICAL:
+        raise RenderError(
+            "configure experimental localization handover",
+            "the handover is only supported by a physical TerraScout target",
+        )
+    if not handover and (features.isolate_fixposition_tf or features.isolate_drive_odometry):
+        raise RenderError(
+            "configure experimental localization handover",
+            "partial TF/odometry isolation is unsafe; enable the coordinated handover",
+        )
+    return handover
+
+
 def processes(unit: UnitContext) -> list[Process]:
+    validate_localization_handover(unit)
     simulated = unit.mode == SIMULATION
     stage_after = [ROBOT_SPAWN, CLOCK_BRIDGE] if simulated else [CLOCK_SYNC]
     localization = localization_processes(unit, stage_after)
@@ -867,6 +1022,11 @@ def processes(unit: UnitContext) -> list[Process]:
         navigation_after = [process.name for process in localization] + [
             "gz_bridge", FAST_LIO, "fast_lio_odom_adapter"
         ]
+    elif unit.deployment == "physical-jetson-nuc":
+        entries.append(fast_lio_physical(unit))
+        entries.append(fast_lio_odom_preview(unit))
+        entries.append(gnss_alignment_shadow(unit))
+
     entries.append(twist_mux(unit, [*stage_after, BATTERY] if simulated else stage_after))
     entries += teleop_processes(unit, stage_after)
     entries += foxglove_processes(unit, stage_after)
@@ -910,6 +1070,8 @@ def unit_files(unit: UnitContext) -> dict[str, SourceFile]:
         files["battery.yaml"] = SourceFile(HARDWARE_PACKAGE, "config/battery.yaml")
         files["lidar_primary.json"] = SourceFile(HARDWARE_PACKAGE, "config/lidar_primary.json")
         files["controllers.yaml"] = CONTROLLERS_CONFIG
+        if unit.deployment == "physical-jetson-nuc":
+            files["fast_lio_physical.yaml"] = SourceFile(NAVIGATION_PACKAGE,"config/fast_lio_physical.yaml",)
     files[FOXGLOVE_BRIDGE_PARAMS_FILE] = SourceFile(
         MISSION_PACKAGE, f"config/{unit.mode}/foxglove_bridge.yaml"
     )

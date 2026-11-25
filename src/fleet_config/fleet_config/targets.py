@@ -41,6 +41,7 @@ SIM = SimTarget(
 
 TARGETS: dict[str, Target] = {
     "terrascout1": PhysicalTarget(robot_class=TERRASCOUT, id="terrascout1"),
+    "terrascout-physical": PhysicalTarget(robot_class=TERRASCOUT,id="terrascout1", deployment="physical-jetson-nuc"),
     "sim": SIM,
     "sim-record": replace(SIM, features=Features(recording_enabled=True)),
     "sim-madum": replace(SIM, features=Features(recording_enabled=True, madum_enabled=True)),
