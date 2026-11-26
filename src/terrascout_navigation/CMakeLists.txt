@@ -36,11 +36,17 @@ if(BUILD_TESTING)
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
   )
 
-  ament_add_pytest_test(
-    test_gnss_alignment_shadow
-    test/test_gnss_alignment_shadow.py
-    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
-  )
+  # GNSS alignment tests require physical-only Fixposition messages.
+  # Skip these tests in simulation builds where the package is unavailable.
+  find_package(fixposition_driver_msgs QUIET)
+
+  if(fixposition_driver_msgs_FOUND)
+    ament_add_pytest_test(
+      test_gnss_alignment_shadow
+      test/test_gnss_alignment_shadow.py
+      APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
+    )
+  endif()
 
   ament_add_pytest_test(
     test_teleop_takeover

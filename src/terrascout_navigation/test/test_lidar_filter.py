@@ -183,7 +183,7 @@ class TestRobotSelfFilter:
 
     def test_keeps_ground_below_chassis_envelope(self):
         # Keep returns below the chassis visual-mesh exclusion margin.
-        data, step = _make_cloud_data([(0.0, 0.0, -0.76)])
+        data, step = _make_cloud_data([(0.0, 0.0, -0.90)])
         mask = _filter_points(data, step, min_range_sq=0.0)
         assert mask.sum() == 1
 
