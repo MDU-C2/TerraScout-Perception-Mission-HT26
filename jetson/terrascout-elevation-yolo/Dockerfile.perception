@@ -1,0 +1,8 @@
+# Add ROS message support without modifying the working mapping image.
+FROM jetson-jazzy-elevation:dev
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-jazzy-vision-msgs \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace/ros2_ws

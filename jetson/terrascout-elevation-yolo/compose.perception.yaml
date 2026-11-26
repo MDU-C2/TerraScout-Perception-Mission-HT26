@@ -1,0 +1,59 @@
+# PC/NUC starts the camera/LiDAR publishers and the Zenoh router.
+# Jetson runs these two services. Both use the Jetson's GPU.
+services:
+  yolo:
+    image: ultralytics/ultralytics:latest-jetson-jetpack6
+    runtime: nvidia
+    network_mode: host
+    init: true
+    environment:
+      YOLO_MODEL: /models/best.pt
+      YOLO_IMGSZ: ${YOLO_IMGSZ:-640}
+      YOLO_CONF: ${YOLO_CONFIDENCE_THRESHOLD:-0.35}
+      YOLO_IOU: ${YOLO_IOU_THRESHOLD:-0.45}
+      YOLO_PORT: ${YOLO_PORT:-58751}
+      PYTHONUNBUFFERED: '1'
+    volumes:
+      - ${TERRASCOUT_YOLO_MODELS:?Set TERRASCOUT_YOLO_MODELS}:/models:ro
+      - ./bridge/yolo_worker.py:/app/yolo_worker.py:ro
+    entrypoint: ["python3", "-u", "/app/yolo_worker.py"]
+    restart: 'no'
+
+  mapping:
+    image: jetson-jazzy-perception:dev
+    runtime: nvidia
+    network_mode: host
+    init: true
+    user: "${HOST_UID:?Set HOST_UID}:${HOST_GID:?Set HOST_GID}"
+    depends_on:
+      - yolo
+    environment:
+      HOME: /tmp
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-133}
+      ZENOH_CONFIG_OVERRIDE: 'mode="client";connect/endpoints=["tcp/${PC_ZENOH_HOST:?Set PC_ZENOH_HOST}:${PC_ZENOH_PORT:-7447}"];scouting/multicast/enabled=false'
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_PATH: /usr/local/cuda
+      LD_LIBRARY_PATH: /usr/local/cuda/targets/aarch64-linux/lib:/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      YOLO_PORT: ${YOLO_PORT:-58751}
+      YOLO_INPUT_TOPIC: ${YOLO_INPUT_TOPIC:-/terrascout1/oakd/rgb/image_raw}
+      YOLO_OUTPUT_TOPIC: ${YOLO_OUTPUT_TOPIC:-/terrascout1/oakd/detections_2d}
+      YOLO_TARGET_FPS: ${YOLO_TARGET_FPS:-5.0}
+      YOLO_CONFIDENCE_THRESHOLD: ${YOLO_CONFIDENCE_THRESHOLD:-0.35}
+      YOLO_MAX_ASPECT_RATIO_H_W: ${YOLO_MAX_ASPECT_RATIO_H_W:-1.5}
+      YOLO_PUBLISH_ANNOTATED: ${YOLO_PUBLISH_ANNOTATED:-false}
+      YOLO_ENABLE_FILE_LOGGING: ${YOLO_ENABLE_FILE_LOGGING:-true}
+      YOLO_LOG_DIR: /data/perception-logs
+      YOLO_ANNOTATED_TOPIC: ${YOLO_ANNOTATED_TOPIC:-/terrascout1/oakd/detections_image}
+      PYTHONUNBUFFERED: '1'
+    volumes:
+      - /usr/local/cuda:/usr/local/cuda:ro
+      - ./ros2_ws:/workspace/ros2_ws
+      - ./bridge:/opt/terrascout-bridge:ro
+      - ./perception-logs:/data/perception-logs
+      - ${TERRASCOUT_YOLO_PKG:?Set TERRASCOUT_YOLO_PKG}:/opt/terrascout-source:ro
+    working_dir: /workspace/ros2_ws
+    entrypoint: ["bash", "/opt/terrascout-bridge/run-mapper-and-bridge.sh"]
+    stop_grace_period: 15s
+    restart: 'no'

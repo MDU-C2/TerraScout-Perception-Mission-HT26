@@ -1,0 +1,13 @@
+# Environment configuration
+.env*
+!.env.perception.example
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated logs and recordings
+*.log
+*.jsonl
+perception-logs/
+recordings/
