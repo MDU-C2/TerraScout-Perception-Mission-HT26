@@ -64,6 +64,7 @@
     - ^/<robot_namespace>/trajectories$
     - ^/<robot_namespace>/waypoints_geo$
     - ^/<robot_namespace>/keepout_zones_geo$
+    - ^/<robot_namespace>/friendly_detections_geo$
 
     # OAK-D
     - ^/<robot_namespace>/oakd/rgb/image_raw$

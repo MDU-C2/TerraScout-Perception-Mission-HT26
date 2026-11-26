@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import statistics
 import subprocess
+import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
 
 import rosbag2_py
@@ -23,6 +24,15 @@ from geometry_msgs.msg import Quaternion
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from std_msgs.msg import String
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patheffects as path_effects
+except ImportError:
+    plt = None
 
 MISSION_STATUS = {
     0: "IDLE", 1: "RUNNING", 2: "PAUSED", 3: "FINISHED", 4: "FAILED", 5: "ABORTED"
@@ -32,6 +42,10 @@ COMMAND_STATUS = {
 }
 DEFAULT_FOOTPRINT = ((0.465, 0.35), (0.465, -0.35), (-0.465, -0.35), (-0.465, 0.35))
 SWEDISH_TIMEZONE = ZoneInfo("Europe/Stockholm")
+DETECTION_CLASSES = {
+    "apache friendly": "friendly",
+    "ka-52 enemy": "enemy",
+}
 
 
 def time_ns(message):
@@ -76,6 +90,7 @@ def load_states(bag: Path, topic: str):
         rosbag2_py.StorageOptions(uri=str(bag), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
     types = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     if topic not in types:
         raise RuntimeError(f"Mission-state topic {topic!r} not recorded; available topics: {sorted(types)}")
@@ -101,6 +116,7 @@ def load_metric_samples(bag: Path, topics: list[str]):
         rosbag2_py.StorageOptions(uri=str(bag), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=topics))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     requested = {topic: type_map[topic] for topic in topics if topic in type_map}
     message_types = {}
@@ -123,6 +139,170 @@ def load_metric_samples(bag: Path, topics: list[str]):
         samples[topic].append((bag_time_ns, message))
         counts[topic] += 1
     return samples, {topic: type_map.get(topic) for topic in topics}, counts
+
+
+def archived_world_for_bag(bag: Path) -> Path | None:
+    """Find the rendered world archived alongside this run's recordings."""
+    for parent in bag.resolve().parents:
+        candidate = parent / "render" / "worlds" / "forest.sdf"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def read_sdf_targets(world_path: Path):
+    """Read Apache/Ka-52 model include positions from the exact rendered SDF."""
+    targets = []
+    for include in ET.parse(world_path).getroot().findall(".//include"):
+        name = include.findtext("name", "")
+        if name.startswith("apache_friend_"):
+            class_name = "friendly"
+        elif name.startswith("ka52_enemy_"):
+            class_name = "enemy"
+        else:
+            continue
+        pose = np.fromstring(include.findtext("pose", ""), sep=" ")
+        if pose.size < 3 or not np.isfinite(pose[:3]).all():
+            continue
+        targets.append({"name": name, "class": class_name,
+                        "x": float(pose[0]), "y": float(pose[1]),
+                        "z": float(pose[2])})
+    return targets
+
+
+def read_recorded_tracks(bag: Path, topic: str, start_ns: int, end_ns: int):
+    """Keep the last recorded localized position for each track ID in the window."""
+    reader = rosbag2_py.SequentialReader()
+    reader.open(rosbag2_py.StorageOptions(uri=str(bag), storage_id="mcap"),
+                rosbag2_py.ConverterOptions("", ""))
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
+    types = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
+    if topic not in types:
+        return None
+    expected = "fleet_interfaces/msg/TrackedObjectArray"
+    if types[topic] != expected:
+        return None
+    message_type = get_message(types[topic])
+    latest = {}
+    while reader.has_next():
+        name, serialized, received_ns = reader.read_next()
+        if name != topic or not start_ns <= received_ns <= end_ns:
+            continue
+        message = deserialize_message(serialized, message_type)
+        for obj in message.objects:
+            category = DETECTION_CLASSES.get(str(obj.class_id).strip().lower())
+            position = np.array([obj.x, obj.y, obj.z], dtype=float)
+            if category is None or not np.isfinite(position).all():
+                continue
+            latest[int(obj.id)] = {
+                "id": int(obj.id), "class": category,
+                "class_id": str(obj.class_id),
+                "x": float(obj.x), "y": float(obj.y), "z": float(obj.z),
+                "confirmed": bool(obj.confirmed), "timestamp_ns": int(received_ns),
+            }
+    return list(latest.values())
+
+
+def evaluate_sdf_detections(targets, tracks, match_distance_m: float = 5.0):
+    """Compare tracks with SDF targets without treating off-route targets as misses."""
+    results = {"match_distance_m": match_distance_m, "coordinate_frame": "SDF/world ENU; tracked-object map coordinates",
+               "classes": {}, "targets": targets, "tracks": tracks}
+    for category in ("friendly", "enemy"):
+        class_targets = [item for item in targets if item["class"] == category]
+        class_tracks = [item for item in tracks if item["class"] == category]
+        matches = []
+        if class_targets and class_tracks:
+            target_xy = np.array([[item["x"], item["y"]] for item in class_targets])
+            track_xy = np.array([[item["x"], item["y"]] for item in class_tracks])
+            distances = np.linalg.norm(target_xy[:, None, :] - track_xy[None, :, :], axis=2)
+            assignment_cost = np.where(distances <= match_distance_m, distances, 1e6)
+            rows, cols = linear_sum_assignment(assignment_cost)
+            for row, col in zip(rows, cols):
+                distance = float(distances[row, col])
+                if distance <= match_distance_m:
+                    matches.append({"target": class_targets[row]["name"],
+                                    "track_id": class_tracks[col]["id"],
+                                    "confirmed": class_tracks[col]["confirmed"],
+                                    "error_m": distance,
+                                    "dx_m": class_tracks[col]["x"] - class_targets[row]["x"],
+                                    "dy_m": class_tracks[col]["y"] - class_targets[row]["y"]})
+        matched_targets = {item["target"] for item in matches}
+        matched_tracks = {item["track_id"] for item in matches}
+        errors = [item["error_m"] for item in matches]
+        results["classes"][category] = {
+            "target_count": len(class_targets), "track_count": len(class_tracks),
+            "matched_count": len(matches),
+            "track_match_fraction": len(matched_tracks) / len(class_tracks) if class_tracks else None,
+            "unmatched_track_count": len(class_tracks) - len(matched_tracks),
+            "matched_confirmed_track_count": sum(item["confirmed"] for item in matches),
+            "matched_unconfirmed_track_count": sum(not item["confirmed"] for item in matches),
+            "confirmed_fraction_of_matches": (
+                sum(item["confirmed"] for item in matches) / len(matches) if matches else None
+            ),
+            "position_error_mean_m": float(np.mean(errors)) if errors else None,
+            "position_error_median_m": float(np.median(errors)) if errors else None,
+            "position_error_rmse_m": float(np.sqrt(np.mean(np.square(errors)))) if errors else None,
+            "position_error_max_m": max(errors) if errors else None,
+            "matches": matches,
+        }
+    results["caveat"] = (
+        "The track-match fraction is the share of unique tracks whose latest mission-window position "
+        "matches an SDF target within the gate; it is not precision. Unmatched tracks are not confirmed "
+        "false positives, and unmatched SDF targets are not counted as false negatives because targets "
+        "may have been off route or outside sensor visibility. Recall and F1 are not computed. "
+        "The report assumes the tracked-object map frame is aligned with the archived SDF world frame."
+    )
+    return results
+
+
+def save_detection_accuracy_plot(evaluation, path: Path):
+    """Plot archived SDF positions, recorded tracks, and matched position errors."""
+    if plt is None:
+        return False
+    fig, axis = plt.subplots(figsize=(10, 8))
+    class_colors = {"friendly": "#00a83b", "enemy": "#e00000"}
+    for category, label in (("friendly", "Apache friendly"), ("enemy", "Ka-52 enemy")):
+        class_color = class_colors[category]
+        targets = [item for item in evaluation["targets"] if item["class"] == category]
+        tracks = [item for item in evaluation["tracks"] if item["class"] == category]
+        if targets:
+            axis.scatter([item["x"] for item in targets], [item["y"] for item in targets],
+                         marker="s", s=110, linewidths=1.2, facecolors=class_color,
+                         edgecolors="#111111", label=f"{label} SDF target")
+        confirmed_tracks = [item for item in tracks if item["confirmed"]]
+        tentative_tracks = [item for item in tracks if not item["confirmed"]]
+        if confirmed_tracks:
+            axis.scatter([item["x"] for item in confirmed_tracks],
+                         [item["y"] for item in confirmed_tracks],
+                         marker="o", s=105, facecolors=class_color,
+                         edgecolors="#2563eb", linewidths=1.5, zorder=5,
+                         label=f"{label} confirmed track")
+        if tentative_tracks:
+            axis.scatter([item["x"] for item in tentative_tracks],
+                         [item["y"] for item in tentative_tracks],
+                         marker="x", s=90, color=class_color,
+                         linewidths=1.6, zorder=6,
+                         path_effects=[
+                             path_effects.Stroke(linewidth=3.5, foreground="#8c0bf5"),
+                             path_effects.Normal(),
+                         ],
+                         label=f"{label} tentative track")
+        for match in evaluation["classes"][category]["matches"]:
+            target = next(item for item in targets if item["name"] == match["target"])
+            track = next(item for item in tracks if item["id"] == match["track_id"])
+            axis.plot([target["x"], track["x"]], [target["y"], track["y"]],
+                      color="#6b7280", alpha=0.55, linewidth=0.6)
+    axis.set(title="Tracks vs archived forest SDF targets",
+             xlabel="East / X [m]", ylabel="North / Y [m]")
+    axis.axis("equal")
+    axis.grid(True, alpha=0.3)
+    axis.legend(loc="best", fontsize=9, markerscale=1.0,
+                labelspacing=0.45, handletextpad=0.6,
+                framealpha=0.95, edgecolor="#444444")
+    fig.tight_layout()
+    fig.savefig(path, dpi=180)
+    plt.close(fig)
+    return True
 
 
 def filter_samples_to_window(samples, start_ns, end_ns):
@@ -866,6 +1046,62 @@ def render_readable_report(report):
         lines.extend(f"- [{label}]({path})" for label, path in available_plots)
     else:
         lines.append("No odometry comparison plots were generated for this recording.")
+    detection_eval = report.get("simulation_detection_accuracy")
+    lines.extend(["", "## Simulation detection accuracy", ""])
+    if detection_eval and detection_eval.get("status") == "available":
+        lines.append(
+            f"Compared each track's latest mission-window position with archived SDF targets using "
+            f"one-to-one, same-class XY matching and a {detection_eval['match_distance_m']:.1f} m gate. "
+            "Confirmed and tentative tracks are both included; keepout creation is not required for a "
+            "track to count as a detection. Position errors apply only to matched pairs. Because targets "
+            "outside the route or sensor view cannot be expected detections, this report does not count "
+            "unmatched SDF targets as false negatives or calculate recall/F1. Unmatched tracks are "
+            "unmatched candidates, not verified false positives."
+        )
+        lines.extend(["", "| Class | SDF targets in map (context only) | Tracks (all statuses) | Matched tracks | Unmatched tracks | Track match rate* | Confirmed / tentative matches | Confirmed share of matches** | Mean error | Median error | RMSE | Max error |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"])
+        for category, label in (("friendly", "Apache friendly"), ("enemy", "Ka-52 enemy")):
+            item = detection_eval["classes"][category]
+            match_pct = (f"{100 * item['track_match_fraction']:.1f}%"
+                         if item["track_match_fraction"] is not None else "—")
+            confirmed_pct = (f"{100 * item['confirmed_fraction_of_matches']:.1f}%"
+                             if item["confirmed_fraction_of_matches"] is not None else "—")
+            fmt = lambda value: f"{value:.2f} m" if value is not None else "—"
+            lines.append(
+                f"| {label} | {item['target_count']} | {item['track_count']} | "
+                f"{item['matched_count']} | {item['unmatched_track_count']} | {match_pct} | "
+                f"{item['matched_confirmed_track_count']} / "
+                f"{item['matched_unconfirmed_track_count']} | {confirmed_pct} | "
+                f"{fmt(item['position_error_mean_m'])} | "
+                f"{fmt(item['position_error_median_m'])} | {fmt(item['position_error_rmse_m'])} | "
+                f"{fmt(item['position_error_max_m'])} |"
+            )
+        lines.extend(["", "### Metric definitions", "",
+                      "- **Matched track:** a confirmed or tentative track paired one-to-one with a same-class SDF target within the XY gate. Keepout creation is irrelevant to this match.",
+                      "- **Unmatched track:** a track without such a spatial pair. It is not automatically a false positive; frame/localization error or target movement may explain it.",
+                      "- **Track match rate:** matched tracks / all tracks. This is a spatial agreement rate, not standard detection precision.",
+                      "- **Confirmed share of matches:** confirmed matched tracks / all matched tracks. This shows the tracker's confirmation status separately from whether a detection spatially matches a target.",
+                      "- **False negatives, recall, and F1:** not reported. They require a list of targets actually visible to the sensors along the route, which this recording does not provide.",
+                      "",
+                      "SDF target count is shown only as map context; off-route or out-of-view targets are not treated as expected detections. Only latest mission-window track positions are compared, and the XY gate affects matching.",
+                      "", "### Matched-track position errors", "",
+                      "Signed X/Y errors are track position minus SDF position; radial error is the XY distance.",
+                      "", "| Class | SDF target | Track ID | Confirmed | X error | Y error | Radial error |",
+                      "|---|---|---:|---|---:|---:|---:|"])
+        for category, label in (("friendly", "Apache friendly"), ("enemy", "Ka-52 enemy")):
+            for match in detection_eval["classes"][category]["matches"]:
+                lines.append(
+                    f"| {label} | {match['target']} | {match['track_id']} | "
+                    f"{'yes' if match['confirmed'] else 'no'} | {match['dx_m']:+.2f} m | "
+                    f"{match['dy_m']:+.2f} m | {match['error_m']:.2f} m |"
+                )
+        lines.extend(["", detection_eval["caveat"]])
+        if detection_eval.get("plot"):
+            lines.extend(["", f"![SDF target and detected-track positions]({detection_eval['plot']})"])
+    elif detection_eval:
+        lines.append(detection_eval.get("reason", "Ground-truth detection evaluation unavailable."))
+    else:
+        lines.append("Not evaluated.")
     lines.extend(["", "## Recording and faults", ""])
     lines.append(f"- Data-capture validation: **{validation.get('status', 'not evaluated')}**.")
     lines.append(f"- MIS-21 summary: {mis21.get('status', 'not evaluated')}.")
@@ -991,6 +1227,9 @@ def main():
     parser.add_argument("--estop-lock-topic", default="/terrascout1/estop_lock")
     parser.add_argument("--rosout-topic", default="/rosout")
     parser.add_argument("--ground-truth-topic", default="/terrascout1/odom_gt")
+    parser.add_argument("--tracked-objects-topic", default="/terrascout1/tracked_objects")
+    parser.add_argument("--detection-match-distance-m", type=float, default=5.0,
+                        help="maximum same-class XY distance for matching tracks to SDF targets")
     parser.add_argument("--datum-topic", default="/terrascout1/fixposition/datum")
     parser.add_argument("--waypoints-topic", default="/terrascout1/waypoints_geo")
     parser.add_argument("--map-yaw-offset-deg", type=float, default=0.0)
@@ -1001,6 +1240,8 @@ def main():
     args = parser.parse_args()
     if args.out_dir is not None and not args.out_dir.strip():
         parser.error("--out-dir cannot be empty; pass a mission result folder")
+    if not math.isfinite(args.detection_match_distance_m) or args.detection_match_distance_m <= 0.0:
+        parser.error("--detection-match-distance-m must be a positive finite distance")
     if args.out_dir is None:
         workspace_root = Path(__file__).resolve().parents[4]
         results_root = workspace_root / "src" / "terrascout_mission_tester" / "mission_results"
@@ -1041,6 +1282,7 @@ def main():
     args.out_dir.mkdir(parents=True, exist_ok=True)
     if args.route and not (args.out_dir / "waypoints.json").exists():
         (args.out_dir / "waypoints.json").write_bytes(args.route.read_bytes())
+   
     matching_instances = [entry for entry in mission_instances if entry["mission_id"] == mission_id]
     if args.mission_instance is not None:
         selected_instance = next((entry for entry in matching_instances
@@ -1090,6 +1332,30 @@ def main():
         "e-stop state": (args.estop_topic, args.estop_lock_topic),
     }, first_stamp, last_stamp, expected_no_overlap_groups)
     mission_metrics = filter_samples_to_window(metrics, first_stamp, last_stamp)
+    world_path = archived_world_for_bag(args.bag)
+    if world_path is None:
+        simulation_detection_accuracy = {
+            "status": "unavailable",
+            "reason": "No rendered forest.sdf was found in the run archive; refusing to compare against the current workspace template.",
+        }
+    else:
+        targets = read_sdf_targets(world_path)
+        tracks = read_recorded_tracks(
+            args.bag, args.tracked_objects_topic, first_stamp, last_stamp
+        )
+        if tracks is None:
+            simulation_detection_accuracy = {
+                "status": "unavailable", "world_file": str(world_path),
+                "reason": f"Tracked-object topic {args.tracked_objects_topic!r} is missing or has an unsupported type.",
+            }
+        else:
+            simulation_detection_accuracy = {
+                "status": "available", "world_file": str(world_path),
+                **evaluate_sdf_detections(targets, tracks, args.detection_match_distance_m),
+            }
+            plot_path = args.out_dir / "detection_accuracy.png"
+            if save_detection_accuracy_plot(simulation_detection_accuracy, plot_path):
+                simulation_detection_accuracy["plot"] = plot_path.name
     motion_summary, available_metrics, missing_metrics = summarize_motion(
         mission_metrics, args.odom_topic, args.cmd_vel_topic, args.teleop_topic, args.safety_topic
     )
@@ -1353,12 +1619,14 @@ def main():
         "fast_lio_localization": fast_lio_localization,
         "fast_lio_full_recording": fast_lio_full_recording,
         "keepout_events": keepout_events,
+        "simulation_detection_accuracy": simulation_detection_accuracy,
         "artifacts": {
             key: matches[0].name if (matches := sorted(args.out_dir.glob(pattern))) else None
             for key, pattern in {
                 "trajectory_comparison": "*_trajectory_comparison.png",
                 "position_error": "*_position_error.png",
                 "orientation_error": "*_orientation_error.png",
+                "detection_accuracy": "detection_accuracy.png",
             }.items()
         },
         "mis20": mis20,

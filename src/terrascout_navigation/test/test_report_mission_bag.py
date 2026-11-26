@@ -24,7 +24,51 @@ from report_mission_bag import (
     summarize_leg_metrics,
     summarize_velocity_stream,
     summarize_controller_diagnostics,
+    evaluate_sdf_detections,
 )
+
+
+def test_sdf_detection_evaluation_matches_one_to_one_by_class():
+    targets = [
+        {"name": "apache_friend_1", "class": "friendly", "x": 0.0, "y": 0.0, "z": 1.0},
+        {"name": "apache_friend_2", "class": "friendly", "x": 10.0, "y": 0.0, "z": 1.0},
+        {"name": "ka52_enemy_1", "class": "enemy", "x": 20.0, "y": 0.0, "z": 1.0},
+    ]
+    tracks = [
+        {"id": 4, "class": "friendly", "x": 0.3, "y": 0.4, "z": 1.0, "confirmed": True},
+        {"id": 5, "class": "friendly", "x": 10.3, "y": 0.4, "z": 1.0, "confirmed": False},
+        {"id": 7, "class": "friendly", "x": 1.8, "y": 0.0, "z": 1.0, "confirmed": False},
+        {"id": 6, "class": "enemy", "x": 30.0, "y": 0.0, "z": 1.0, "confirmed": True},
+    ]
+
+    result = evaluate_sdf_detections(targets, tracks, match_distance_m=2.0)
+
+    friendly = result["classes"]["friendly"]
+    assert friendly["matched_count"] == 2
+    assert friendly["track_match_fraction"] == pytest.approx(2 / 3)
+    assert friendly["unmatched_track_count"] == 1
+    assert "candidate_false_negative_count" not in friendly
+    assert "recall_proxy" not in friendly
+    assert "f1_proxy" not in friendly
+    assert friendly["matched_confirmed_track_count"] == 1
+    assert friendly["matched_unconfirmed_track_count"] == 1
+    assert friendly["confirmed_fraction_of_matches"] == pytest.approx(0.5)
+    assert "unmatched_target_count" not in friendly
+    assert friendly["unmatched_track_count"] == 1
+    assert friendly["position_error_mean_m"] == pytest.approx(0.5)
+    enemy = result["classes"]["enemy"]
+    assert enemy["matched_count"] == 0
+    assert enemy["track_match_fraction"] == pytest.approx(0.0)
+    assert enemy["unmatched_track_count"] == 1
+    assert "candidate_false_negative_count" not in enemy
+    assert "recall_proxy" not in enemy
+    assert "f1_proxy" not in enemy
+    assert enemy["matched_confirmed_track_count"] == 0
+    assert enemy["matched_unconfirmed_track_count"] == 0
+    assert enemy["confirmed_fraction_of_matches"] is None
+    assert "unmatched_target_count" not in enemy
+    assert enemy["unmatched_track_count"] == 1
+    assert "Recall and F1 are not computed" in result["caveat"]
 
 
 def test_summarize_velocity_stream_cadence_and_motion_values():

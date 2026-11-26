@@ -19,6 +19,7 @@
 
   <!-- Perception and object tracking -->
   <exec_depend>fleet_interfaces</exec_depend>
+  <exec_depend>foxglove_msgs</exec_depend>
   <exec_depend>sensor_msgs_py</exec_depend>
   <exec_depend>vision_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>

@@ -50,13 +50,15 @@ def processes(unit: UnitContext) -> list[Process]:
         server_cmd.append("--headless-rendering")
         server_env[SOFTWARE_RENDERING_VARIABLE] = "1"
     server_cmd += ["-v", GZ_VERBOSITY, f"{CONTAINER_RENDER_DIR}/{simulation.world.sdf_file}"]
-    return [
+    processes = [
         exec_process(GZ_SERVER, cmd=server_cmd, env=server_env, after=(ROUTER,)),
         world_ready(unit, simulator_environment(unit), after=(GZ_SERVER,)),
-        exec_process(
+    ]
+    if simulation.gui_enabled:
+        processes.append(exec_process(
             GZ_CLIENT,
             cmd=[GZ_EXECUTABLE, "sim", "-g", "-v", GZ_VERBOSITY],
             env=simulator_environment(unit),
             after=(WORLD_READY,),
-        ),
-    ]
+        ))
+    return processes

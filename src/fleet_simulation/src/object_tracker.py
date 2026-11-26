@@ -11,12 +11,15 @@ class ObjectTrack:
     def __init__(self, track_id, observation, timestamp, tracker):
         self.id = track_id
         self.obj_class = observation['class_id']
-        self.observations = 5
+        # The depth-backed observation that creates the track is hit one.
+        self.observations = 1
         self.last_seen = float(timestamp)
         self.last_predicted = float(timestamp)
         self.min_observations = tracker.min_observations
         self.process_std_per_sqrt_second = tracker.process_std_per_sqrt_second
-        self.existence_score = 1.0  #Heuristic, will add +1 and -1
+        self.existence_score = float(np.clip(
+            observation.get('yolo_confidence', 1.0), 0.0, 1.0
+        ))
         self.confirmation_score = tracker.confirmation_score
         self.confirmed = False
         self.expected_misses = 0
@@ -65,7 +68,10 @@ class ObjectTrack:
         self.last_seen = float(timestamp)
         self.last_visibility_check = float(timestamp)
         self.expected_misses = 0
-        self.existence_score = min(12.0, self.existence_score + 1.0)
+        confidence = float(np.clip(
+            observation.get('yolo_confidence', 1.0), 0.0, 1.0
+        ))
+        self.existence_score = min(12.0, self.existence_score + confidence)
 
         #TODO, image == None is dealt with in self.save image, but then we get no image since it is only called once per track
         if (self.observations >= self.min_observations and self.existence_score >= self.confirmation_score):
@@ -106,7 +112,7 @@ class ObjectTracker:
     #TODO, motivate/verify
     def __init__(
         self,
-        min_observations=5,
+        min_observations=10,
         initial_std=0.5,
         measurement_std=0.20,
         process_std_per_sqrt_second=0.01,
