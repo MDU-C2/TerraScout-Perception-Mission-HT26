@@ -229,6 +229,20 @@ def distributed_simulation_boundary(
             ),
         )
 
+    if deployment == "physical-jetson-nuc":
+        # Reuse the working simulation/Jetson contract, but do not send the
+        # simulated clock or advertise an OAK-D RGB topic the physical NUC
+        # does not currently publish. The Jetson camera source needs a
+        # separate hardware-specific decision before enabling YOLO inference.
+        sim_boundary = distributed_simulation_boundary(namespace, robot_class, "elevation-pc")
+        excluded = {CLOCK_TOPIC, f"/{namespace}/oakd/rgb/image_raw"}
+        return Boundary(
+            exports=tuple(
+                entry for entry in sim_boundary.exports if entry.topic not in excluded
+            ),
+            imports=sim_boundary.imports,
+        )
+
     return Boundary(
         exports=robot_exports(namespace, robot_class),
     )
