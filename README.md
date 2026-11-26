@@ -2,21 +2,9 @@
 
 [![CI](https://github.com/SLaRCLabs/sage/actions/workflows/ci.yml/badge.svg)](https://github.com/SLaRCLabs/sage/actions/workflows/ci.yml)
 
-Fleet management for ground and aerial robots on ROS 2 Jazzy.
+Fleet management for ground and aerial robots on ROS 2 Jazzy. This README is the operator guide for running TerraScout with Docker, using the mission menu, and operating the available mission and keepout controls. For implementation details, system data flow, configuration, coordinate assumptions, and development-machine setup, see [LOCAL_SETUP.md](LOCAL_SETUP.md).
 
-SAGE runs TerraScout ground robots and AeroScout drones in Gazebo simulation or on hardware. Each robot runs as one unit, rendered from a Python fleet definition, and shares its topics with the station over Zenoh.
-
-Status: research software. The simulation is verified end to end; the physical TerraScout awaits bench checks; there is no physical AeroScout yet.
-
-## Recent development updates
-
-- **Forest simulation:** terrain generation keeps tree placements inside the 90 m × 90 m terrain and updates tree elevations to follow the generated heightmap. Small and medium pine model variants are available alongside the existing trees, and the forest world and Foxglove view use the updated scene.
-- **Navigation and obstacle handling:** ground segmentation publishes clouds in `base_footprint`, whose origin is at ground level (unlike the elevated `base_link`). The non-ground obstacle cloud is filtered from 0.0 m to +1.5 m in that frame; its input `minZ` stays wide at -1.5 m, and the separate raw cloud remains available for costmap ray-clearing. Points already classified as ground are not restored by this height filter, so root classification still requires validation. Current experimental Nav2 tuning checks path validity at 2 Hz, updates/publishes local costmap at 8/5 Hz and global at 3/2 Hz, uses 0.9 m local and 1.0 m global inflation, and allows 1.0 m/s forward speed. Collision Monitor has outer 30%-slowdown, middle 60%-slowdown, and inner stop polygons. Validate behavior and controller timing in simulation before relying on these experimental settings.
-- **Missions and Foxglove:** mission handling supports ordered/unordered routes, adding and clearing waypoints, Home/return behavior, and mission drafts from map-frame Foxglove clicks. Failed mission legs can be tracked and recovered by the mission server.
-- **Localization fault response:** an invalid or stale localization fix suspends an active mission; resuming requires an explicit request, valid localization, and a fresh path. Simulation supports deliberate localization-fault injection and clearing for verification.
-- **Positioning and setup:** geodesy and GNSS/map alignment were updated, and local setup notes cover machine-specific ROS domain and Gazebo partition values.
-
-The -1.0 m lower obstacle cutoff, route stability at 1 Hz, inflation tuning, root traversal, mission backtracking, and controller timing still require scenario testing. A successful build does not verify those behaviors. Recent runs show repeated Collision Monitor stops and MPPI failures; inspect the obstacle cloud at the stopped pose and validate low-obstacle safety before relying on this cutoff.
+Status: research software. Simulation behavior and physical-hardware readiness are not equivalent; follow the validation cautions in [LOCAL_SETUP.md](LOCAL_SETUP.md) before relying on navigation or perception results.
 
 ## Install
 
@@ -35,16 +23,31 @@ make use TARGET=sim
 make build
 ```
 
+`make build` renders the selected fleet, builds the Docker image/workspace, and runs the configured package tests. It requires the third-party sources and submodules listed by the build to be available. The selected target is saved in `.sage/current`; use `make list` to see valid target names. Alternatively, supply `TARGET=<name>` on each supported command.
+
 ## Usage
 
 ### Start and stop
 
 ```sh
-make up
-make down
+make up TARGET=sim
+# From another terminal, stop the stack cleanly:
+make down TARGET=sim
 ```
 
-`make up` runs in the foreground. Gazebo opens with both robots, and every process of the `world`, `terrascout1`, `aeroscout1` and `station` units logs `ready`.
+`make up` renders the selected target, writes a run record under `runs/`, creates the Docker Compose units, and runs them in the foreground. Startup output is also saved in that run's `compose.log`. `sim` starts the configured simulation world and robot units; the actual robot groups are set in `src/fleet_config/fleet_config/targets.py` (currently the checked-in `SIM` target includes TerraScout; inspect it rather than assuming an AeroScout is included). Keep this terminal open to monitor logs. Press Ctrl+C and allow Compose to stop, or use `make down TARGET=sim` in a second terminal. Do not start a second stack in the same SAGE instance while its containers are running.
+
+For distributed Jetson mapping, first configure the PC uplink IP/interface and matching ROS domain, then run `make build TARGET=sim-elevation-pc` and `make up TARGET=sim-elevation-pc` on the PC, and start the mapping launcher on the Jetson. Follow [LOCAL_SETUP.md](LOCAL_SETUP.md) and [TerraScout_Jetson_Migration_Checklist.md](TerraScout_Jetson_Migration_Checklist.md); verify current addresses rather than assuming example IPs are valid.
+
+#### Open a TerraScout container shell
+
+With the stack running, open a second host terminal and run:
+
+```sh
+make shell TARGET=sim SERVICE=unit-terrascout1
+```
+
+This opens a shell in the running TerraScout ROS container. ROS CLI commands can also be run directly on the host if the ROS environment is sourced and connected; the menu below automatically uses host ROS when `fleet_common` is available, otherwise it executes ROS commands through `make exec` in the container. `make shell` is useful for inspecting ROS topics, services, and logs from inside the unit.
 
 ### Record and compare FAST-LIO2 odometry
 
@@ -71,6 +74,28 @@ python3 src/terrascout_navigation/terrascout_navigation/scripts/process_mission_
 The report writes `mission_events.csv`, `mission_report.json`, and—if absent—a `waypoints.json` snapshot reconstructed from recorded waypoint GeoJSON. It selects the latest positive mission ID by default; pass `--mission-id` to choose another mission. MIS-20 scoring uses `/terrascout1/odom_gt`, the recorded geodetic datum and completed waypoint points, plus the Nav2 footprint polygon. It reports each destination's minimum planar vehicle-edge distance and checks the 20-minute limit. This computation assumes ground-truth `odom` axes align with `map` axes and uses the configured simulation footprint; a simulation pass does not establish an assessed-trial or physical-robot pass. For MIS-22 it also calculates odometry path length, transitions to zero commanded velocity, teleoperation takeovers, and safety-stop activations when those streams are present. Check the JSON `available` and `not_recorded_or_not_computed` fields for remaining gaps such as order-change reasons and faults.
 
 The interactive tester in `src/terrascout_mission_tester/terrascout_menu.py` has four route presets and uses `waypoints.json`. WP7–WP20 are generated local simulation points; verify them in the world before use. Consecutive legs in the current presets were checked to stay below 44 m, leaving margin under the mission server's 45 m leg limit.
+
+#### Run the TerraScout mission tester
+
+Start the simulation first, then run from the workspace root:
+
+```sh
+python3 src/terrascout_mission_tester/terrascout_menu.py
+```
+
+The menu defaults to namespace `terrascout1`; set `TERRASCOUT_NAMESPACE` to select another robot. It provides four preset ordered/unordered routes, waypoint add/clear, saved Home, mission suspend/resume and state inspection, keepout create/list/delete, and simulation-only localization-fault injection/clear. Preset routes are stored in `src/terrascout_mission_tester/waypoints.json`. A selected mission creates a timestamped bundle in `src/terrascout_mission_tester/mission_results/` with route, metadata, and client log; “client started” is not proof of server acceptance or mission completion.
+
+The menu's keepout option creates/updates a named zone centered on a chosen test waypoint or entered GPS coordinate, with user-entered X/Y dimensions and yaw. Automatic enemy keepouts use the same server but are generated by `enemy_reader` from confirmed Ka-52 tracks. Do not use the localization-fault option on physical hardware.
+
+Suggested first-use sequence:
+
+1. Build and start the target (`sim` for local simulation; `sim-elevation-pc` only when Jetson networking is configured).
+2. In another terminal, start the menu with `python3 src/terrascout_mission_tester/terrascout_menu.py`.
+3. Choose **8** to inspect waypoint names/GPS coordinates. For a first test, choose **1** (ordered) or **2** (unordered), select a short preset, and choose the final destination. The mission client runs separately so the menu remains available.
+4. Choose **10** to inspect mission state, and check Foxglove plus the run/container logs. A client PID or log file only means the request was launched; confirm server acceptance and state transitions.
+5. Choose **11** to create/list/delete manual keepouts. For testing, use a known waypoint or known GPS center, unique label, dimensions and yaw. Confirm the accepted server response, the 2D GPS polygon and purple center point, the 3D volume, and Nav2 behavior before using a zone operationally.
+6. To test automatic zones, ensure the detector/detections, camera info, point cloud, ENU odometry and datum are live. Observe the reader's perception/track logs, then the keepout server's accepted GPS/ENU log. Do not treat an automatically placed zone as correct until the sensor-axis and coordinate alignment assumptions have been checked.
+7. Stop the fleet cleanly with Ctrl+C in `make up` or `make down TARGET=sim` from another terminal.
 
 ### Watch in Foxglove
 
@@ -103,7 +128,7 @@ ros2 run fleet_common keepout_zone.py --namespace terrascout1 --label test_zone 
 ros2 run fleet_common keepout_zone.py --namespace terrascout1 --label test_zone --clear
 ```
 
-For a colored semi-opaque keepout zone volume in Foxglove, add a 3D panel layer for `/terrascout1/keepout_zone_marker` (message type `visualization_msgs/msg/Marker`).
+For a colored semi-opaque keepout zone volume in Foxglove, add a 3D panel layer for `/terrascout1/keepout_zone_marker` (message type `visualization_msgs/msg/Marker`). The GPS polygon and purple center point are available on `/terrascout1/keepout_zones_geo` in the geographic map panel when that layer is enabled.
 
 ### Send a mission
 

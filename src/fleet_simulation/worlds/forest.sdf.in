@@ -251,14 +251,47 @@
       <include><name>pine_large_12</name><uri>model://pine_tree</uri><pose>25.500000 -19.550000 2.059970 0 0 0.000000</pose></include>
       <include><name>oak_o18</name><uri>model://oak_tree</uri><pose>30.600000 -9.350000 2.324870 0 0 0.000000</pose></include>
 
-      <!-- Helicopter Targets (Apache Friendly & Ka-52 Enemy) for 2D Perception & Object Detection -->
-      <include><name>apache_friend_1</name><uri>model://apache_friend</uri><pose>3.500000 0.000000 3.609782 0 0 3.14159</pose></include>
-      <include><name>ka52_enemy_1</name><uri>model://ka52_enemy</uri><pose>6.500000 2.000000 3.432071 0 0 2.8</pose></include>
-      <include><name>apache_friend_2</name><uri>model://apache_friend</uri><pose>8.000000 -2.500000 3.076848 0 0 3.5</pose></include>
-      <include><name>ka52_enemy_2</name><uri>model://ka52_enemy</uri><pose>12.000000 1.000000 3.245913 0 0 3.14159</pose></include>
-      <!-- Reverse direction targets (behind robot, facing +X) -->
-      <include><name>apache_friend_3</name><uri>model://apache_friend</uri><pose>-4.000000 1.500000 2.786792 0 0 0.0</pose></include>
-      <include><name>ka52_enemy_3</name><uri>model://ka52_enemy</uri><pose>-5.500000 -1.500000 2.742466 0 0 0.0</pose></include>
+      <!-- 20 friendly and 20 enemy perception targets; positions/yaw use TARGET_SEED. -->
+      <include><name>apache_friend_1</name><uri>model://apache_friend</uri><pose>-32.106519 13.991317 2.238419 0 0 1.539600</pose></include>
+      <include><name>apache_friend_2</name><uri>model://apache_friend</uri><pose>-14.508267 29.051825 3.309821 0 0 2.447290</pose></include>
+      <include><name>apache_friend_3</name><uri>model://apache_friend</uri><pose>40.514384 -32.264681 2.852718 0 0 -1.785740</pose></include>
+      <include><name>apache_friend_4</name><uri>model://apache_friend</uri><pose>15.278480 -20.169723 1.907292 0 0 0.943521</pose></include>
+      <include><name>apache_friend_5</name><uri>model://apache_friend</uri><pose>46.696220 41.985016 3.060671 0 0 1.365930</pose></include>
+      <include><name>apache_friend_6</name><uri>model://apache_friend</uri><pose>13.587080 25.273210 3.655293 0 0 2.150281</pose></include>
+      <include><name>apache_friend_7</name><uri>model://apache_friend</uri><pose>1.515370 32.589526 4.383947 0 0 -0.981524</pose></include>
+      <include><name>apache_friend_8</name><uri>model://apache_friend</uri><pose>-5.161945 -16.118755 2.166607 0 0 1.186232</pose></include>
+      <include><name>apache_friend_9</name><uri>model://apache_friend</uri><pose>-22.210078 -27.366694 3.664409 0 0 0.655968</pose></include>
+      <include><name>apache_friend_10</name><uri>model://apache_friend</uri><pose>16.318062 -48.715952 2.442959 0 0 -0.569501</pose></include>
+      <include><name>apache_friend_11</name><uri>model://apache_friend</uri><pose>-29.058388 37.462406 2.163664 0 0 -2.502682</pose></include>
+      <include><name>apache_friend_12</name><uri>model://apache_friend</uri><pose>29.746232 10.670968 3.262165 0 0 -0.923324</pose></include>
+      <include><name>apache_friend_13</name><uri>model://apache_friend</uri><pose>-15.489942 44.681979 2.778060 0 0 2.912161</pose></include>
+      <include><name>apache_friend_14</name><uri>model://apache_friend</uri><pose>40.044960 -18.065820 2.009475 0 0 -1.781135</pose></include>
+      <include><name>apache_friend_15</name><uri>model://apache_friend</uri><pose>-23.844695 20.084089 3.214999 0 0 -2.427584</pose></include>
+      <include><name>apache_friend_16</name><uri>model://apache_friend</uri><pose>-27.210802 -0.688968 3.944110 0 0 -0.831395</pose></include>
+      <include><name>apache_friend_17</name><uri>model://apache_friend</uri><pose>8.002845 -31.109364 2.120011 0 0 -2.507112</pose></include>
+      <include><name>apache_friend_18</name><uri>model://apache_friend</uri><pose>23.124066 4.848306 3.185812 0 0 -1.462732</pose></include>
+      <include><name>apache_friend_19</name><uri>model://apache_friend</uri><pose>12.150326 -12.785568 1.599196 0 0 2.604105</pose></include>
+      <include><name>apache_friend_20</name><uri>model://apache_friend</uri><pose>-3.002909 17.563922 3.193229 0 0 -1.138626</pose></include>
+      <include><name>ka52_enemy_1</name><uri>model://ka52_enemy</uri><pose>-49.819765 29.403106 3.331275 0 0 0.539660</pose></include>
+      <include><name>ka52_enemy_2</name><uri>model://ka52_enemy</uri><pose>-0.004498 -40.655407 1.690257 0 0 -1.641515</pose></include>
+      <include><name>ka52_enemy_3</name><uri>model://ka52_enemy</uri><pose>40.470407 48.973617 2.936085 0 0 1.055449</pose></include>
+      <include><name>ka52_enemy_4</name><uri>model://ka52_enemy</uri><pose>-44.126478 -14.176878 2.379394 0 0 -2.339504</pose></include>
+      <include><name>ka52_enemy_5</name><uri>model://ka52_enemy</uri><pose>27.421216 45.846440 3.148953 0 0 1.820926</pose></include>
+      <include><name>ka52_enemy_6</name><uri>model://ka52_enemy</uri><pose>38.839543 12.093547 2.397099 0 0 -0.484144</pose></include>
+      <include><name>ka52_enemy_7</name><uri>model://ka52_enemy</uri><pose>-33.972569 44.706208 2.029110 0 0 -1.987620</pose></include>
+      <include><name>ka52_enemy_8</name><uri>model://ka52_enemy</uri><pose>-48.714211 10.431575 3.132660 0 0 1.622630</pose></include>
+      <include><name>ka52_enemy_9</name><uri>model://ka52_enemy</uri><pose>6.402386 39.045911 4.890999 0 0 0.341067</pose></include>
+      <include><name>ka52_enemy_10</name><uri>model://ka52_enemy</uri><pose>44.212087 28.772663 2.766248 0 0 -0.388646</pose></include>
+      <include><name>ka52_enemy_11</name><uri>model://ka52_enemy</uri><pose>13.902625 15.960727 3.087059 0 0 -1.629695</pose></include>
+      <include><name>ka52_enemy_12</name><uri>model://ka52_enemy</uri><pose>31.424306 -36.523855 2.559229 0 0 1.767874</pose></include>
+      <include><name>ka52_enemy_13</name><uri>model://ka52_enemy</uri><pose>26.603634 -43.228564 2.476085 0 0 -0.846439</pose></include>
+      <include><name>ka52_enemy_14</name><uri>model://ka52_enemy</uri><pose>16.859279 -37.165560 1.548830 0 0 -2.870846</pose></include>
+      <include><name>ka52_enemy_15</name><uri>model://ka52_enemy</uri><pose>-22.000826 -46.728162 4.019413 0 0 2.924001</pose></include>
+      <include><name>ka52_enemy_16</name><uri>model://ka52_enemy</uri><pose>-41.609061 5.476962 2.361061 0 0 -2.950177</pose></include>
+      <include><name>ka52_enemy_17</name><uri>model://ka52_enemy</uri><pose>15.956953 38.118618 3.733443 0 0 -2.384663</pose></include>
+      <include><name>ka52_enemy_18</name><uri>model://ka52_enemy</uri><pose>-10.860000 -22.470000 2.577404 0 0 1.356000</pose></include>
+      <include><name>ka52_enemy_19</name><uri>model://ka52_enemy</uri><pose>-18.633326 -38.215036 2.026732 0 0 -1.835602</pose></include>
+      <include><name>ka52_enemy_20</name><uri>model://ka52_enemy</uri><pose>45.848011 19.891517 1.760306 0 0 -1.035877</pose></include>
 
     </model>
 

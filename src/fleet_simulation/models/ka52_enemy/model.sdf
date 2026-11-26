@@ -7,6 +7,7 @@
         <geometry>
           <mesh>
             <uri>model://ka52_enemy/meshes/ka52_enemy.obj</uri>
+            <scale>1.5 1.5 1.5</scale>
           </mesh>
         </geometry>
       </collision>
@@ -14,6 +15,7 @@
         <geometry>
           <mesh>
             <uri>model://ka52_enemy/meshes/ka52_enemy.obj</uri>
+            <scale>1.5 1.5 1.5</scale>
           </mesh>
         </geometry>
       </visual>

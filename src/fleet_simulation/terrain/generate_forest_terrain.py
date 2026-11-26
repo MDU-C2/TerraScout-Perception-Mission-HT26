@@ -10,6 +10,14 @@ SIZE_X = 110.0
 SIZE_Y = 110.0
 HEIGHT = 5
 SEED = 42
+TARGET_SEED = 2026
+TARGET_COUNT_PER_TEAM = 20
+TARGET_MIN_SPAWN_DISTANCE = 16.0
+TARGET_MIN_SEPARATION = 8.0
+TARGET_MARGIN = 5.0
+# Keep Ka-52 enemy 18 at the requested forest location (local ENU metres).
+FIXED_ENEMY_TARGETS_ENU = {18: (-10.86, -22.47)}
+FIXED_ENEMY_TARGET_YAWS = {18: 1.3560}
 
 PNG = "src/fleet_simulation/terrain/forest_ground_heightmap.png"
 OBJ = "src/fleet_simulation/terrain/forest_ground.obj"
@@ -35,7 +43,7 @@ Z /= Z.max()
 # Use 0.0 for exact terrain-surface placement.
 TREE_BASE_OFFSET = -0.3
 
-# Helicopter poses are measured from the local terrain surface, not from Z=0.
+# Helicopter target poses are measured from the local terrain surface.
 HELICOPTER_CLEARANCE = 0.0
 
 
@@ -107,28 +115,56 @@ def update_forest_world_tree_heights(world_file="src/fleet_simulation/worlds/for
             f.write(new_text)
 
 
-def update_forest_world_helicopter_heights(
+def generate_forest_world_helicopter_targets(
     world_file="src/fleet_simulation/worlds/forest.sdf.in", field=Z
 ):
-    """Keep helicopter targets at a fixed clearance above the generated terrain."""
+    """Place 20 targets per team around the forest with repeatable random yaw."""
     with open(world_file, "r") as f:
         text = f.read()
 
-    pattern = re.compile(
-        r"(<include><name>(?:apache_friend|ka52_enemy)_\d+</name><uri>"
-        r"model://(?:apache_friend|ka52_enemy)</uri><pose>)"
-        r"(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+"
-        r"(-?\d+(?:\.\d+)?)(\s+-?\d+(?:\.\d+)?\s+"
-        r"-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?</pose></include>)"
-    )
+    rng_targets = np.random.default_rng(TARGET_SEED)
+    positions = []
+    attempts = 0
+    while len(positions) < 2 * TARGET_COUNT_PER_TEAM:
+        attempts += 1
+        if attempts > 100_000:
+            raise RuntimeError("Could not place all helicopter targets with requested spacing")
+        x, y = rng_targets.uniform(
+            -SIZE_X / 2 + TARGET_MARGIN,
+            SIZE_X / 2 - TARGET_MARGIN,
+            size=2,
+        )
+        if np.hypot(x, y) < TARGET_MIN_SPAWN_DISTANCE:
+            continue
+        if any(np.hypot(x - px, y - py) < TARGET_MIN_SEPARATION for px, py in positions):
+            continue
+        positions.append((float(x), float(y)))
 
-    def repl(match):
-        x = float(match.group(2))
-        y = float(match.group(3))
+    target_lines = [
+        "      <!-- 20 friendly and 20 enemy perception targets; positions/yaw use TARGET_SEED. -->"
+    ]
+    for index, (x, y) in enumerate(positions[:TARGET_COUNT_PER_TEAM], start=1):
+        yaw = rng_targets.uniform(-np.pi, np.pi)
         z = terrain_height_at(x, y, field) * HEIGHT + HELICOPTER_CLEARANCE
-        return f"{match.group(1)}{x:.6f} {y:.6f} {z:.6f}{match.group(5)}"
+        target_lines.append(
+            f'      <include><name>apache_friend_{index}</name><uri>model://apache_friend</uri>'
+            f"<pose>{x:.6f} {y:.6f} {z:.6f} 0 0 {yaw:.6f}</pose></include>"
+        )
+    for index, (x, y) in enumerate(positions[TARGET_COUNT_PER_TEAM:], start=1):
+        x, y = FIXED_ENEMY_TARGETS_ENU.get(index, (x, y))
+        yaw = FIXED_ENEMY_TARGET_YAWS.get(index, rng_targets.uniform(-np.pi, np.pi))
+        z = terrain_height_at(x, y, field) * HEIGHT + HELICOPTER_CLEARANCE
+        target_lines.append(
+            f'      <include><name>ka52_enemy_{index}</name><uri>model://ka52_enemy</uri>'
+            f"<pose>{x:.6f} {y:.6f} {z:.6f} 0 0 {yaw:.6f}</pose></include>"
+        )
 
-    new_text = pattern.sub(repl, text)
+    start_marker = "      <!-- 20 friendly and 20 enemy perception targets; positions/yaw use TARGET_SEED. -->"
+    start = text.find(start_marker)
+    end = text.find("\n\n    </model>", start)
+    if start < 0 or end < 0:
+        raise RuntimeError(f"Could not find helicopter target section in {world_file}")
+    new_text = text[:start] + "\n".join(target_lines) + text[end:]
     if new_text != text:
         with open(world_file, "w") as f:
             f.write(new_text)
@@ -212,7 +248,7 @@ TREE_POSITIONS = [
 # Set TREE_BASE_OFFSET to 0.0 if you want the base to sit exactly on terrain.
 FOREST_TREE_BLOCK = generate_tree_config(TREE_POSITIONS, "model://pine_tree", "pine_c", Z)
 update_forest_world_tree_heights()
-update_forest_world_helicopter_heights()
+generate_forest_world_helicopter_targets()
 
 # Keep the mesh generation output quiet, but leave the terrain-aware tree logic in
 # the file so the world SDF can be generated from the mapping function directly.

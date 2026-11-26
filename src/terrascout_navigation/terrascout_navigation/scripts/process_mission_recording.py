@@ -4,7 +4,6 @@
 import argparse
 import json
 from datetime import datetime, timezone
-import os
 from pathlib import Path
 import re
 import shlex
@@ -85,6 +84,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Fail before creating a partial result bundle if the host environment has
+    # not sourced the generated ROS interfaces needed by both child scripts.
+    try:
+        from fleet_interfaces.msg import MissionState, TrackedObjectArray  # noqa: F401
+    except (ImportError, AttributeError) as exc:
+        parser.error(
+            "ROS message interfaces are unavailable in this Python environment "
+            f"({exc}). Source /opt/ros/jazzy/setup.bash, then build and source "
+            "the host interface overlay as documented in LOCAL_SETUP.md; do not "
+            "rely on the container-oriented install/setup.bash."
+        )
+
     bag = args.bag
     if bag is None:
         metadata_files = list(RECORDINGS_ROOT.glob("**/metadata.yaml"))
@@ -117,27 +128,16 @@ def main() -> int:
     if comparison_result.stderr:
         print(comparison_result.stderr, file=sys.stderr, end="")
 
-    try:
-        bag_in_container = Path("/workspace") / bag.relative_to(WORKSPACE_ROOT)
-        out_dir_in_container = Path("/workspace") / out_dir.relative_to(WORKSPACE_ROOT)
-    except ValueError:
-        parser.error("--bag and --out-dir must be inside the workspace for containerized report generation")
     report = [
-        "python3", "/workspace/src/terrascout_navigation/terrascout_navigation/scripts/report_mission_bag.py", str(bag_in_container),
-        "--out-dir", str(out_dir_in_container), "--state-topic", args.state_topic,
+        sys.executable, str(SCRIPT_DIR / "report_mission_bag.py"), str(bag),
+        "--out-dir", str(out_dir), "--state-topic", args.state_topic,
     ]
     if args.mission_id is not None:
         report.extend(["--mission-id", str(args.mission_id)])
     if args.mission_instance is not None:
         report.extend(["--mission-instance", str(args.mission_instance)])
-    container_command = [
-        "docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
-        "--workdir", "/workspace", "--volume", f"{WORKSPACE_ROOT}:/workspace",
-        "sage-sim:latest", "bash", "-lc",
-        "source /opt/ros/jazzy/setup.bash && source install/setup.bash && " + shlex.join(report),
-    ]
     report_result = subprocess.run(
-        container_command, cwd=WORKSPACE_ROOT, check=False, capture_output=True, text=True
+        report, cwd=WORKSPACE_ROOT, check=False, capture_output=True, text=True
     )
     print(report_result.stdout, end="")
     if report_result.stderr:

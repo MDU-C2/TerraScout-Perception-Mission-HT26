@@ -20,8 +20,6 @@ from simRealDepth import simRealDepth
 
 from object_tracker import ObjectTracker
 
-#TODO, yolo confidence is still not in use
-
 #This toggles if we use noise or not for the oak-D distance and odometry data
 #And it is specifically for noise generated in THIS file
 ownOdomNoise = False
@@ -72,7 +70,6 @@ class EnemyReader(Node):
             'tracked_objects',
             10
         )
-
         self.cloud_sub = Subscriber(
             self, PointCloud2, 'oakd/points',
             qos_profile=qos_profile_sensor_data,
@@ -112,6 +109,7 @@ class EnemyReader(Node):
 
         #Position
         p = msg.pose.pose.position
+        position = np.array([p.x, p.y, p.z], dtype=float)
 
         #Orientation
         q = msg.pose.pose.orientation
@@ -120,11 +118,11 @@ class EnemyReader(Node):
             return
 
         if ownOdomNoise:
-            x, y, z = np.random.normal(0, 0.05, size = 3) #TODO, this is just randomly chosen 5cm SD, adjust
+            position += np.random.normal(0.0, 0.05, size=3)
 
         self.odom_history.append((
             self.message_time(msg.header.stamp),
-            np.array([p.x, p.y, p.z], dtype=float),
+            position,
             quaternion,
         ))
 
@@ -396,6 +394,11 @@ class EnemyReader(Node):
             obj = TrackedObject()
 
             obj.id = int(track.id)
+            obj.class_id = str(track.obj_class)
+            obj.x = float(track.position[0])
+            obj.y = float(track.position[1])
+            obj.z = float(track.position[2])
+            obj.confirmed = track.status == 'confirmed'
             
             # Image
             if track.image is not None:

@@ -6,6 +6,8 @@
     - [x] Terrain mesh
     - [x] Terrain-following trees
     - [x] Forest visualization
+    - [x] Apache friend and Ka-52 enemy target mesh scaling set to 1.5×
+    - [ ] Visually verify target scale and terrain clearance in the rendered world
   - [x] Robot placement
     - [x] Elevated spawn
   - [ ] Forest layout
@@ -25,6 +27,10 @@
   - [x] Preserve raw cloud for clearing
 - [ ] Perception validation
   - [ ] Ground rejection
+  - [ ] Verify multi-observation track confirmation and enemy keepout creation timing
+  - [ ] Verify YOLO/depth timestamp synchronization and point-cloud FLU axis assumption against live sensor data
+  - [ ] Validate detected map ENU and converted GPS coordinates against known targets/datum
+  - [ ] Verify enemy keepout updates only after 1 m track movement and that 4 m zones update correctly
   - [ ] Root detection
     - [ ] Validate baseline groundInlierThreshold 0.15 on roots and uneven terrain
     - [ ] Validate ground-level height reference on roots, rocks, and curbs
@@ -44,7 +50,12 @@
   - [x] Nav2 integration
     - [x] Zone services
     - [x] Zone visualization
+    - [x] Purple 3D keepout volume marker
+    - [x] GPS polygon and purple center point in Foxglove 2D geographic map
+    - [x] Log datum and GPS-to-map ENU values when zones are accepted
     - [x] Zone clearing
+  - [ ] Verify 2D GeoJSON and 3D volume overlays in a live Foxglove session
+  - [ ] Verify enemy-generated zones appear in Nav2 and both Foxglove map views after server restart/restore
   - [ ] Create zones by clicking
 
 ## Planning and control
@@ -117,13 +128,17 @@
   - [x] Sample waypoint menu
   - [x] Four mission presets with consecutive legs under 44 m
   - [x] FAST-LIO comparison CSV, error plots, route overlay, local-time filenames and optional mission/mode labels
+  - [x] Document tester menu, detection-to-keepout pipeline, and Jetson SSH/Zenoh distinction
+  - [ ] Run menu mission and keepout workflows end-to-end on simulation and verify saved result bundles
 - [x] Teleoperation handoff
 - [ ] Mission shortcuts
 
 ## Reliability and documentation
 - [ ] Diagnose exit 137
-- [x] Setup documentation
-- [x] README and local setup notes reflect current FAST-LIO workflow and experimental Nav2 settings
+  - [x] Document system architecture, local simulation workflow, PC–Jetson topic flow, and SSH administration steps
+  - [x] Document YOLO detection → depth localization → object tracking → keepout service → Nav2 flow, mission-server role, and TerraScout menu
+  - [ ] Verify SSH/key-login steps and distributed Jetson workflow on the target hardware
+  - [x] README and local setup notes describe simulation targets, keepout overlays, and PC–Jetson setup
 - [ ] Re-run and record navigation trials
   - [x] Crossed the low root with the -0.10 m cutoff
   - [ ] Diagnose later open-space stop at waypoint 5

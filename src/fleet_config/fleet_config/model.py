@@ -121,6 +121,7 @@ class Simulation:
     datum: Datum
     seed: int
     gpu: bool
+    gui_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -217,6 +218,7 @@ class SimTarget:
     groups: Mapping[str, RobotGroup]
     seed: int
     gpu: bool = False
+    gui_enabled: bool = True
     features: Features = Features()
 
     # Distributed deployment configuration
@@ -227,7 +229,9 @@ class SimTarget:
         return Fleet(
             name=name,
             mode=SIMULATION,
-            simulation=Simulation(self.world, self.datum, self.seed, self.gpu),
+            simulation=Simulation(
+                self.world, self.datum, self.seed, self.gpu, self.gui_enabled
+            ),
             features=self.features,
             topology=self.topology,
             groups=MappingProxyType(dict(self.groups)),

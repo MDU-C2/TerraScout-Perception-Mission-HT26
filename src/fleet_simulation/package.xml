@@ -17,6 +17,17 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>fleet_common</exec_depend>
 
+  <!-- Perception and object tracking -->
+  <exec_depend>fleet_interfaces</exec_depend>
+  <exec_depend>foxglove_msgs</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>message_filters</exec_depend>
+  <exec_depend>image_geometry</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>
