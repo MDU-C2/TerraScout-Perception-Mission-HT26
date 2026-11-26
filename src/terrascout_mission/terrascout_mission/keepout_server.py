@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import rclpy
+from fleet_interfaces.msg import TrackedObjectArray
 from fleet_interfaces.srv import GetKeepoutZone, ListKeepoutZones, SetKeepoutZone
 from geometry_msgs.msg import Point32, PolygonStamped
 from nav2_msgs.srv import ClearEntireCostmap
@@ -113,6 +114,9 @@ class KeepoutServer(Node):
         self._obstacle_pub = self.create_publisher(PointCloud2, self._obstacle_topic, latched_qos())
         self._marker_pub = self.create_publisher(Marker, self._marker_topic, latched_qos())
         self._geojson_pub = self.create_publisher(GeoJSON, "keepout_zones_geo", latched_qos())
+        self._friendly_geojson_pub = self.create_publisher(
+            GeoJSON, "friendly_detections_geo", latched_qos()
+        )
         self._clear_local_costmap = self.create_client(
             ClearEntireCostmap, "local_costmap/clear_entirely_local_costmap"
         )
@@ -120,6 +124,9 @@ class KeepoutServer(Node):
             ClearEntireCostmap, "global_costmap/clear_entirely_global_costmap"
         )
         self.create_subscription(NavSatFix, self._datum_topic, self._on_datum, latched_qos())
+        self.create_subscription(
+            TrackedObjectArray, "tracked_objects", self._on_tracked_objects, 10
+        )
         self.create_service(SetKeepoutZone, "set_keepout_zone", self._on_set_keepout_zone)
         self.create_service(GetKeepoutZone, "get_keepout_zone", self._on_get_keepout_zone)
         self.create_service(ListKeepoutZones, "list_keepout_zones", self._on_list_keepout_zones)
@@ -325,6 +332,40 @@ class KeepoutServer(Node):
         message = GeoJSON()
         message.geojson = json.dumps({"type": "FeatureCollection", "features": features})
         self._geojson_pub.publish(message)
+
+    def _on_tracked_objects(self, msg: TrackedObjectArray) -> None:
+        """Publish confirmed friendly ENU tracks as GeoJSON points for Foxglove's map."""
+        features = []
+        if self._datum is not None:
+            for track in msg.objects:
+                if track.class_id != "Apache friendly" or not track.confirmed:
+                    continue
+                latitude, longitude, _ = enu_to_llh(
+                    track.x,
+                    track.y,
+                    track.z,
+                    self._datum.latitude,
+                    self._datum.longitude,
+                    self._datum.altitude,
+                )
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [longitude, latitude],
+                        },
+                        "properties": {
+                            "name": f"Friendly sign {track.id}",
+                            "style": {"color": "#06b6d4"},
+                        },
+                    }
+                )
+        message = GeoJSON()
+        message.geojson = json.dumps(
+            {"type": "FeatureCollection", "features": features}
+        )
+        self._friendly_geojson_pub.publish(message)
 
     def _publish_cached_obstacles(self) -> None:
         """Refresh cached static keepout points for Nav2's decaying voxel layer."""

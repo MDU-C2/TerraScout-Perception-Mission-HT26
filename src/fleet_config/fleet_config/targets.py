@@ -30,7 +30,7 @@ SPAWN_Z = float(
 
 SIM = SimTarget(
     world=FOREST,
-    datum=Datum(lat=47.397742, lon=8.545594, elevation=488.0),
+    datum=Datum(lat=59.637061, lon=16.583254, elevation=488.0),
     seed=1,
     gpu=True,
     groups={
@@ -50,6 +50,7 @@ TARGETS: dict[str, Target] = {
     "sim-elevation-pc": replace(
         SIM,
         deployment="elevation-pc",
+        gui_enabled=False,
         topology=Topology(uplink_address="10.132.135.87", uplink_interface="eno1"),
         features=Features(recording_enabled=False),
     ),

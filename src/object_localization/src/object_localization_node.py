@@ -3,7 +3,6 @@
 
 from collections import deque
 from fleet_interfaces.msg import Enemy, EnemyArray, TrackedObject, TrackedObjectArray
-from fleet_interfaces.srv import SetKeepoutZone
 
 import numpy as np
 import rclpy
@@ -14,17 +13,12 @@ from sensor_msgs_py import point_cloud2
 from vision_msgs.msg import Detection2DArray
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import NavSatFix
 from image_geometry import PinholeCameraModel
 from scipy.spatial.transform import Rotation, Slerp
 
 from simRealDepth import simRealDepth
 
 from object_tracker import ObjectTracker
-from fleet_common.geodesy import enu_to_llh
-from fleet_common.qos import latched_qos
-
-#TODO, yolo confidence is still not in use
 
 #This toggles if we use noise or not for the oak-D distance and odometry data
 #And it is specifically for noise generated in THIS file
@@ -36,6 +30,9 @@ reportCroppedImages = False
 enemyClass = 'Ka-52 Enemy'
 
 camera_offset = np.array([0.36, 0.0, 0.55])
+
+maxOdomAge = 0.05
+minPublishRange = 1
 
 #TODO, generate our own YOLO noise, misses and false positives?
 
@@ -49,15 +46,11 @@ class EnemyReader(Node):
         self.min_valid_points = 10
         
         self.tracker = ObjectTracker()
-        self.datum = None
-        self.keepout_size = 4.0
-        self.keepout_update_distance = 1.0
-        self._keepout_positions = {}
-        self._keepout_pending = set()
         self.odom_history = deque(maxlen=150)
         self.image_history = deque(maxlen=10)
         self.camera_model = None
         self.camera_info_size = None
+        self.last_published_enemies = {}
 
         self.detection_sub = Subscriber(
             self, Detection2DArray, 'oakd/detections_2d',
@@ -77,7 +70,6 @@ class EnemyReader(Node):
             'tracked_objects',
             10
         )
-
         self.cloud_sub = Subscriber(
             self, PointCloud2, 'oakd/points',
             qos_profile=qos_profile_sensor_data,
@@ -88,8 +80,6 @@ class EnemyReader(Node):
         )
 
         self.odom_sub = self.create_subscription(
-            # Datum-aligned ENU pose; local odom cannot be converted to LLH
-            # using the GNSS datum for keepout placement.
             Odometry, 'fixposition/odometry_enu',
             self.odom_callback, 10,
         )
@@ -108,66 +98,7 @@ class EnemyReader(Node):
             )
 
         self.sync.registerCallback(self.sensor_callback)
-        self.keepout_client = self.create_client(SetKeepoutZone, 'set_keepout_zone')
-        self.datum_sub = self.create_subscription(
-            NavSatFix, 'fixposition/datum', self.datum_callback, latched_qos(),
-        )
-        self.create_timer(0.5, self.keepout_timer_callback)
         self.get_logger().info('Enemy reader started (KF + gated association)')
-
-    def datum_callback(self, msg):
-        if np.isfinite([msg.latitude, msg.longitude, msg.altitude]).all():
-            self.datum = msg
-
-    def keepout_timer_callback(self):
-        if self.datum is None or not self.keepout_client.service_is_ready():
-            return
-        for track in self.tracker.confirmed_tracks():
-            if track.obj_class != enemyClass:
-                continue
-            label = f'enemy_track_{track.id}'
-            position = track.position
-            previous = self._keepout_positions.get(label)
-            if previous is not None and np.linalg.norm(position - previous) < self.keepout_update_distance:
-                continue
-            if label in self._keepout_pending:
-                continue
-            latitude, longitude, _ = enu_to_llh(
-                float(position[0]), float(position[1]), float(position[2]),
-                self.datum.latitude, self.datum.longitude, self.datum.altitude,
-            )
-            request = SetKeepoutZone.Request()
-            request.label = label
-            request.clear = False
-            request.latitude = latitude
-            request.longitude = longitude
-            request.x_length = self.keepout_size
-            request.y_length = self.keepout_size
-            request.yaw_deg = 0.0
-            self._keepout_pending.add(label)
-            future = self.keepout_client.call_async(request)
-            future.add_done_callback(
-                lambda completed, zone=label, pos=position.copy(),
-                       lat=latitude, lon=longitude:
-                    self._keepout_done(completed, zone, pos, lat, lon)
-            )
-
-    def _keepout_done(self, future, label, position, latitude, longitude):
-        self._keepout_pending.discard(label)
-        try:
-            response = future.result()
-            if response is None or not response.accepted:
-                reason = 'no response' if response is None else response.reason
-                self.get_logger().warning(f'keepout {label} rejected: {reason}')
-                return
-            self._keepout_positions[label] = position
-            self.get_logger().info(
-                f'updated keepout {label} from map ENU '
-                f'({position[0]:.2f}, {position[1]:.2f}, {position[2]:.2f}) '
-                f'at {latitude:.7f},{longitude:.7f}'
-            )
-        except Exception as exc:
-            self.get_logger().warning(f'keepout {label} request failed: {exc}')
 
     @staticmethod
     def message_time(stamp):
@@ -178,6 +109,7 @@ class EnemyReader(Node):
 
         #Position
         p = msg.pose.pose.position
+        position = np.array([p.x, p.y, p.z], dtype=float)
 
         #Orientation
         q = msg.pose.pose.orientation
@@ -186,11 +118,11 @@ class EnemyReader(Node):
             return
 
         if ownOdomNoise:
-            x, y, z = np.random.normal(0, 0.05, size = 3) #TODO, this is just randomly chosen 5cm SD, adjust
+            position += np.random.normal(0.0, 0.05, size=3)
 
         self.odom_history.append((
             self.message_time(msg.header.stamp),
-            np.array([p.x, p.y, p.z], dtype=float),
+            position,
             quaternion,
         ))
 
@@ -238,7 +170,7 @@ class EnemyReader(Node):
         t, p, q  = min(history, key=lambda item: abs(item[0] - timestamp))
 
         age = abs(t - timestamp)
-        if age > 0.30:
+        if age > maxOdomAge:
             return None
 
         return p, Rotation.from_quat(q).as_matrix(), age <= 0.20
@@ -246,15 +178,14 @@ class EnemyReader(Node):
 
     def get_position_from_point_cloud(self, object_points):
 
-        # Gazebo attaches this sensor to oakd_link, whose axes are base FLU:
-        # +X forward, +Y left, +Z up. Do not apply the ROS optical-frame RPY
-        # to these raw Gazebo points a second time.
+        #Ensure x, y, z are finite and x is positve
         valid = object_points[np.isfinite(object_points).all(axis=2)]
         valid = valid[valid[:, 0] > 0.0]
  
         if len(valid) == 0:
             return None
 
+        #X is depth
         depths = valid[:, 0]
 
         #Get MAD, get tolerace, then filter
@@ -322,6 +253,12 @@ class EnemyReader(Node):
         if ownPointCloudNoise:
             points = simRealDepth(points)
 
+        #TODO, CALIBRATE
+        #Inverse formula, to retain the old depth Z, from the noise depth Z'
+        #Z = Z' / (1 − 0.00414·Z') # Taken from parameters in: simRealDepth.py
+        points[:, :, 0] = points[:, :, 0] / (1 - 0.00414 * points[:, :, 0])
+
+
         #get image seen by YOLO
         detection_time = self.message_time(detections_msg.header.stamp)
 
@@ -359,19 +296,12 @@ class EnemyReader(Node):
                 'bbox_center': np.array([cx, cy], dtype=float),
             })
 
-            # Detection boxes are in RGB image pixels. The organized depth cloud
-            # may use a different resolution, so scale coordinates before slicing.
+            #Get bounding box corners
             w, h = detection.bbox.size_x, detection.bbox.size_y
-            if self.camera_info_size is None:
-                self.get_logger().warn('Waiting for camera info before associating depth')
-                continue
-            image_width, image_height = self.camera_info_size
-            scale_x = cloud_msg.width / image_width
-            scale_y = cloud_msg.height / image_height
-            x1 = max(0, int((cx - w / 2) * scale_x))
-            x2 = min(cloud_msg.width, int(np.ceil((cx + w / 2) * scale_x)))
-            y1 = max(0, int((cy - h / 2) * scale_y))
-            y2 = min(cloud_msg.height, int(np.ceil((cy + h / 2) * scale_y)))
+            x1 = max(0, int(cx - w / 2))
+            x2 = min(cloud_msg.width, int(cx + w / 2))
+            y1 = max(0, int(cy - h / 2))
+            y2 = min(cloud_msg.height, int(cy + h / 2))
 
             #Skip empty boxes
             if x2 <= x1 or y2 <= y1:
@@ -387,22 +317,7 @@ class EnemyReader(Node):
                 )
                 continue
 
-            camera_position_robot = position
-            global_position = p_robot + R_world_robot @ (
-                camera_position_robot + camera_offset
-            )
-
-            print(
-                f'PERCEPTION {obj_class}: pixel=({cx:.1f},{cy:.1f}) '
-                f'bbox=({x1},{y1})-({x2},{y2}) cloud={cloud_msg.width}x{cloud_msg.height} '
-                f'frame={cloud_msg.header.frame_id} cloud_xyz='
-                f'({position[0]:.2f},{position[1]:.2f},{position[2]:.2f}) '
-                f'robot_enu=({p_robot[0]:.2f},{p_robot[1]:.2f},{p_robot[2]:.2f}) '
-                f'camera_offset=({camera_offset[0]:.2f},{camera_offset[1]:.2f},'
-                f'{camera_offset[2]:.2f}) map_enu=({global_position[0]:.2f},'
-                f'{global_position[1]:.2f},{global_position[2]:.2f})',
-                flush=True,
-            )
+            global_position = p_robot + R_world_robot @ (position + camera_offset)
 
             #Save object observation
             observations.append({
@@ -416,12 +331,8 @@ class EnemyReader(Node):
 
         #Create a function that goes from expected 3D object center to 2D camera image center
         #This will be sent to object tracker as an input
-        project = None
-        if pose_fresh and self.camera_model is not None and self.camera_info_size is not None:
-            image_width, image_height = self.camera_info_size
-            project = self.projector(
-                p_robot, R_world_robot, image_width, image_height
-            )
+        project = (self.projector(p_robot, R_world_robot, cloud_msg.width, cloud_msg.height)
+                   if pose_fresh else None)
 
         #Call the Kalman filter on each track
         #As well was the data association
@@ -435,18 +346,44 @@ class EnemyReader(Node):
             if track.status == 'confirmed'
         ]
 
-        #Publish to Navigation
-        enemies_msg = EnemyArray()
-        for track in confirmed_tracks:
-            if track.obj_class == enemyClass:
-                enemy = Enemy()
-                enemy.id = int(track.id)
-                enemy.x = float(track.position[0])
-                enemy.y = float(track.position[1])
-                enemies_msg.enemies.append(enemy)
+        # Current enemy positions
+        current_enemies = {
+            int(track.id): (float(track.position[0]), float(track.position[1]))
+            for track in confirmed_tracks
+        }      
 
+        #Check if new enemies appeared or old enemies disappeared
+        changed_ids = current_enemies.keys() != self.last_published_enemies.keys()
 
-        self.enemies_pub.publish(enemies_msg)
+        #Check if any position has changed enough to be intresting
+        changed_positions = any(
+            np.linalg.norm(
+                np.array(pos) - np.array(self.last_published_enemies[id])
+            ) >= minPublishRange
+            for id, pos in current_enemies.items()
+            if id in self.last_published_enemies
+        )
+
+        if changed_ids or changed_positions:
+            self.get_logger().info(
+                f'Observations={len(observations)}, '
+                f'Tracks={len(tracks)}, '
+                f'Enemies={len(current_enemies)}, '
+                f'Changed IDs={changed_ids}, '
+                f'Changed positions={changed_positions}'
+            )
+
+            #Publish to Navigation
+            enemies_msg = EnemyArray()
+            for track in confirmed_tracks:
+                if track.obj_class == enemyClass:
+                    enemy = Enemy()
+                    enemy.id = int(track.id)
+                    enemy.x = float(track.position[0])
+                    enemy.y = float(track.position[1])
+                    enemies_msg.enemies.append(enemy)
+            self.enemies_pub.publish(enemies_msg)
+            self.last_published_enemies = current_enemies.copy()
 
         #TODO, everything below needs to be inspected
         objects_msg = TrackedObjectArray()
@@ -457,6 +394,11 @@ class EnemyReader(Node):
             obj = TrackedObject()
 
             obj.id = int(track.id)
+            obj.class_id = str(track.obj_class)
+            obj.x = float(track.position[0])
+            obj.y = float(track.position[1])
+            obj.z = float(track.position[2])
+            obj.confirmed = track.status == 'confirmed'
             
             # Image
             if track.image is not None:

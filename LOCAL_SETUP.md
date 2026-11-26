@@ -1,8 +1,219 @@
 # Local SAGE Setup Notes
 
-This document contains machine-specific setup notes and fixes for running the SAGE TerraScout simulation.
+This document is the implementation and system-behavior reference for TerraScout: how the Docker/ROS deployment is assembled, how perception becomes a keepout, how missions reach Nav2, what the recent feature work changed, and what remains to be validated. Operator instructions for building, starting, and using the menu/CLI are kept in [README.md](README.md).
 
 Some values are specific to each development computer. Do not blindly copy machine-specific values between computers.
+
+## Related setup and technical notes
+
+- [NVIDIA setup](NVIDIA_SETUP.md) — GPU drivers, NVIDIA Container Toolkit, and Docker GPU access.
+- [Nav2 CPU fix](NAV2_CPU_FIX.md) — CPU/resource troubleshooting for Nav2.
+- [FAST-LIO2 URDF integration](FASTLIO2_URDF_integration.md) — robot description and FAST-LIO2 integration notes.
+- [Jetson migration checklist](TerraScout_Jetson_Migration_Checklist.md) — steps and validation for the distributed Jetson setup.
+- [URDF-based LiDAR self-filtering](URDF-Based_LiDAR_self_filtering.md) — filtering robot-body points from LiDAR data.
+
+## Implemented work and where it lives
+
+This section indexes the main TerraScout work documented here. It describes implementation intent and current wiring; it does not claim that every behavior has been validated on physical hardware.
+
+### Fleet and Docker deployment
+
+Python target definitions are rendered into Docker Compose units. Simulation and physical builds use different image/build modes, and TerraScout processes run together in a namespaced unit.
+
+Locations: `Makefile`, `src/fleet_config/fleet_config/targets.py`, `src/fleet_config/fleet_config/classes/terrascout.py`, and `docker/`.
+
+### PC–Jetson deployment
+
+The PC simulation can expose selected ROS traffic through Zenoh to Jetson mapping/perception. SSH is for host administration; machine addresses, ROS domain, and Gazebo partition must match the intended deployment and isolation.
+
+Locations: `src/fleet_config/fleet_config/targets.py`, `src/fleet_config/fleet_config/model.py`, and [TerraScout_Jetson_Migration_Checklist.md](TerraScout_Jetson_Migration_Checklist.md).
+
+### Simulation, sensors, and forest world
+
+The Gazebo model defines TerraScout's simulated sensors; bridges expose topics to ROS and Foxglove. Terrain generation, forest assets, and the world template define the simulated environment and spawn context, with tree placement/elevation fitted to the generated heightmap.
+
+Locations: `src/terrascout_description/urdf/scout.urdf.xacro`, `src/terrascout_description/config/gz_bridge.yaml`, `src/terrascout_mission/config/simulation/foxglove_bridge.yaml`, `src/fleet_simulation/terrain/`, `src/fleet_simulation/worlds/`, and `src/fleet_simulation/models/`.
+
+### Perception, localization, and tracking
+
+`s_perception_2d` runs the configured detector against OAK-D RGB input and publishes 2D detections. `enemy_reader` synchronizes detections, depth, and timestamped robot pose, converts observations to map ENU, and feeds the class-aware `object_tracker`. Confirmed enemy tracks are published and separately sent to the keepout service; detailed behavior is described below.
+
+Locations: `src/s_perception_2d/`, `src/fleet_simulation/src/enemy_reader.py`, and `src/fleet_simulation/src/object_tracker.py`.
+
+### Keepouts and visualization
+
+Named GPS keepouts are accepted by services, converted using the configured datum, persisted during the unit run, published for Nav2, and exposed to Foxglove as a 3D marker and 2D geographic GeoJSON.
+
+Locations: `src/fleet_interfaces/srv/`, `src/fleet_common/fleet_common/keepout_zone.py`, `src/terrascout_mission/terrascout_mission/keepout_server.py`, and `src/terrascout_mission/terrascout_mission/keepout_geometry.py`.
+
+### Mission execution and Foxglove input
+
+Mission requests are validated and sequenced by the mission server, reported as state, and executed through Nav2 goals. Mission-level route ordering is distinct from Nav2 path planning. In Foxglove, map-frame clicks can form a waypoint draft and submit ordered or unordered missions through the same server path.
+
+Locations: `src/fleet_common/fleet_common/send_mission.py`, `src/terrascout_mission/terrascout_mission/mission_server.py`, `src/terrascout_navigation/`, `src/terrascout_mission/terrascout_mission/foxglove_mission_input.py`, and `src/terrascout_mission/config/`.
+
+### Mission test menu
+
+This host-side test client exercises route presets, Home, waypoint updates, mission state/control, keepout CRUD, and simulation-only localization fault injection. It is not a runtime dependency.
+
+Location: `src/terrascout_mission_tester/`.
+
+### Recording and evaluation
+
+Recording-enabled targets capture simulation topics. Post-processing compares FAST-LIO odometry to ground truth and produces a mission report when recorded mission state is available.
+
+Locations: `src/fleet_config/fleet_config/targets.py`, `src/terrascout_navigation/terrascout_navigation/scripts/process_mission_recording.py`, and `src/terrascout_navigation/terrascout_navigation/scripts/compare_fast_lio_gt.py`.
+
+### Navigation safety and tuning
+
+Ground segmentation, costmaps, controller behavior, behavior-tree recovery, and Collision Monitor jointly affect obstacle avoidance. The current values are experimental and require scenario testing.
+
+Locations: `src/terrascout_navigation/config/ground_seg.yaml`, `src/terrascout_navigation/config/nav2.yaml`, `src/terrascout_navigation/config/navigate_to_pose.xml`, and `patches/ground_segmentation_ros2/`.
+
+### Robot models
+
+Simulated Apache and Ka-52 model visuals/collision geometry use the current 1.5× scale adjustment.
+
+Locations: `src/fleet_simulation/models/apache_friend/model.sdf` and `src/fleet_simulation/models/ka52_enemy/model.sdf`.
+
+The sections below explain how these components interact, which coordinate/frame assumptions matter, where persistent state lives, and how to inspect/test the result. For concise run commands and menu key-by-key usage, see [README.md](README.md).
+
+## System overview and PC–Jetson workflow
+
+The repository's Makefile renders a fleet configuration from `src/fleet_config/fleet_config/targets.py`. Docker Compose runs each configured unit with its own ROS 2 processes and namespace. Within a host, SAGE uses Zenoh to connect units and the station. ROS domain IDs isolate unrelated ROS graphs; machines that are meant to exchange ROS data must use the same domain.
+
+For `sim-elevation-pc`, the PC runs Gazebo, FAST-LIO2, TerraScout/Nav2, and the fleet router. The Jetson runs the separate `elevation_mapping_cupy` workspace and connects to the PC's Zenoh TCP endpoint. LiDAR, camera, clock, and TF flow PC → Jetson; elevation GridMap and perception results flow Jetson → PC. SSH is only the remote administration shell—it does not transport ROS topics. Zenoh carries the distributed ROS traffic.
+
+```text
+PC: Docker SAGE (Gazebo / FAST-LIO2 / Nav2 / Foxglove)
+     └── Zenoh TCP, PC_IP:7447
+             ├── filtered LiDAR, camera, /clock, TF ──→ Jetson mapping/perception
+             └── elevation GridMap and detections   ←── Jetson
+
+Developer laptop/PC ── SSH ──→ Jetson host (shell/launch/admin only)
+```
+
+### Connect to the Jetson over SSH
+
+SSH requires the Jetson to be reachable over the network, with its SSH server enabled and a valid account. The repository does not define the Jetson's username, password, or a permanent address; obtain those from the device owner/network configuration. Do not commit credentials or private keys.
+
+1. Find the Jetson's address on the Jetson itself with `ip -4 addr`, or obtain its DHCP reservation from the network administrator. Find the PC's address separately; they are not interchangeable.
+2. From the PC/developer machine, connect with the account and Jetson address supplied for your device:
+
+    ```sh
+    ssh <jetson_user>@<jetson_ip>
+    ```
+
+    On first connection, verify the host-key fingerprint through a trusted channel before accepting it. If public-key login is configured, use an existing key or create one with `ssh-keygen` and install the public key using `ssh-copy-id <jetson_user>@<jetson_ip>`. Never copy the private key to the Jetson.
+3. Optional: add a local-only `~/.ssh/config` alias (do not commit it):
+
+    ```sshconfig
+    Host sage-jetson
+         HostName <jetson_ip>
+         User <jetson_user>
+         IdentityFile ~/.ssh/id_ed25519
+    ```
+
+    Then connect with `ssh sage-jetson`. Replace placeholders with values confirmed for your machine. The SSH address is the Jetson's IP; the Jetson's Zenoh endpoint must instead point to the PC's IP.
+4. Once connected, inspect the mapping workspace and launcher on the Jetson. The currently documented example is `~/jetson-elevation/start-terrascout-mapping.sh`; verify that this path exists on the device before running it. Run the launcher on the Jetson host (or use the device's documented procedure), and confirm its container/node has the expected ROS and Zenoh environment.
+
+See [TerraScout_Jetson_Migration_Checklist.md](TerraScout_Jetson_Migration_Checklist.md) for the topic boundary, current example endpoint, and end-to-end GridMap checks. Its IP/interface examples are machine-specific and must be replaced with current values.
+
+### Build and run from the PC
+
+Run these commands from the repository root. For the all-local simulation, use `sim`; for the distributed Jetson mapping topology, use `sim-elevation-pc`:
+
+```sh
+make build TARGET=sim
+make up TARGET=sim
+# Stop cleanly from another terminal, if needed:
+make down
+```
+
+For the distributed target, first configure the PC uplink address and interface in `src/fleet_config/fleet_config/targets.py`, then build and run:
+
+```sh
+make render TARGET=sim-elevation-pc
+make build TARGET=sim-elevation-pc
+make up TARGET=sim-elevation-pc
+```
+
+Once the fleet is running, `make shell TARGET=sim-elevation-pc SERVICE=unit-terrascout1` opens a shell in the PC's TerraScout container. Use SSH separately to open a shell on the Jetson host; do not expect `ros2` commands over SSH to see PC topics unless that Jetson process has joined the configured Zenoh graph.
+
+### What Docker starts and how to inspect it
+
+`make build TARGET=<target>` first renders the fleet definition, builds the mode-specific Docker image, builds ROS packages with colcon, runs the package tests, and for simulation also builds PX4 SITL. It is the build/test step; it does not start the robot stack. `make up TARGET=<target>` renders the fleet again, records the source state and rendered configuration under `runs/`, then starts the generated Compose services in the foreground. The rendered files are under `.sage/render/<target>.<instance>/`; the active run is linked under `.sage/run/<instance>/`. Each robot unit has namespaced ROS processes inside its container. The fleet router and the units exchange configured topics/services over Zenoh. The simulation world has GUI/Gazebo host requirements, including working NVIDIA container support for the configured GPU target.
+
+```sh
+make list
+make build TARGET=sim
+make up TARGET=sim
+```
+
+Keep `make up` running in its terminal. In another terminal, inspect logs or enter the TerraScout container:
+
+```sh
+make logs TARGET=sim
+make shell TARGET=sim SERVICE=unit-terrascout1
+```
+
+`make shell` runs `ros-workspace-exec` in the selected container, so ROS and the installed workspace are sourced there. For one command without an interactive shell, use `make exec TARGET=sim COMMAND='ros2 topic list'`. Stop with Ctrl+C in the `make up` terminal and wait for Compose to stop, or use `make down TARGET=sim` from another terminal. `TARGET` is required unless you first saved one using `make use TARGET=<target>`; using explicit `TARGET` avoids accidentally addressing another rendered target. Do not mix simulation and physical builds in the same `build/` and `install/` output without cleaning as directed by the build error.
+
+To see exactly what a target will run before launch, use `make render TARGET=sim` and inspect `.sage/render/sim.1/fleet.yaml` and the generated unit/Compose files. After a run, inspect the matching `runs/<timestamp>-<target>.<instance>/compose.log`, `git-status.txt`, and `git.diff`; the run record captures working-tree changes as well as the commit.
+
+## Detection-to-keepout pipeline
+
+### How the feature developed
+
+This pipeline was assembled in stages, rather than being one node that detects and avoids objects:
+
+1. **YOLO model and image detections.** The `s_perception_2d` package supplies the trained model and detector node. The detector consumes OAK-D RGB images and publishes 2D bounding boxes with class IDs/scores on `oakd/detections_2d`; an annotated image can also be published for visual inspection. In the distributed `sim-elevation-pc` setup, the Jetson can run this detector and send detections to the PC over the configured Zenoh boundary. The model's class labels must match the IDs/names expected by the reader (`Ka-52 Enemy` for automatic enemy keepouts).
+2. **3D localization in `enemy_reader`.** The simulation-side reader pairs detections with the organized OAK-D point cloud, uses camera calibration and a timestamp-matched ENU odometry pose, and estimates a map-frame XYZ position for each detection. This bridges 2D image detection to a world-coordinate observation; it is not itself a tracker or a Nav2 keepout.
+3. **Temporal tracking in `object_tracker`.** The reader passes depth-backed observations to `ObjectTracker`. The tracker associates observations by class and 3D position, updates a Kalman filter, and maintains tentative/confirmed tracks. Confirmation requires ten matched depth observations and confidence-weighted existence score of at least 4; expected visible misses reduce the score. Only confirmed tracks labelled `Ka-52 Enemy` are selected for the automatic keepout path.
+4. **Enemy message and keepout service are separate outputs.** The reader publishes confirmed enemy X/Y tracks to `enemies` for consumers, and separately calls `set_keepout_zone` with GPS coordinates for the keepout server. Publishing `enemies` does not itself create a keepout.
+5. **Keepout server and navigation.** The server converts the GPS center into the configured map frame, builds a named rectangle, persists it, and publishes the geometry/obstacles consumed by Nav2 collision/costmap configuration. It also publishes Foxglove visualizations. This makes the zone available to navigation; it does not prove that the original detection or GPS conversion was accurate.
+6. **Mission server.** `mission_server` owns mission readiness, validation, waypoint ordering, Nav2 action goals, state reporting, recovery, and keepout-aware waypoint handling. It checks destinations against the persisted keepout definitions; Nav2 separately plans each active leg using its costmaps. The mission server does not run YOLO or create enemy tracks.
+7. **TerraScout mission tester.** `terrascout_menu.py` is an operator/test client, not part of the autonomous runtime pipeline. It calls the mission and keepout CLI/service paths to exercise routes, waypoints, Home, state, keepouts, suspend/resume, and simulation fault injection. A launched command is not evidence that the mission was accepted or completed; use the mission state and node logs to confirm.
+
+Relevant source locations:
+
+- YOLO package/model: `src/s_perception_2d/`
+- Detection/depth localization and keepout client: `src/fleet_simulation/src/enemy_reader.py`
+- Track association/filter/confirmation: `src/fleet_simulation/src/object_tracker.py`
+- Keepout storage, Nav2 outputs, and visualization: `src/terrascout_mission/terrascout_mission/keepout_server.py`
+- Mission readiness/execution/navigation: `src/terrascout_mission/terrascout_mission/mission_server.py`
+- Foxglove map-click mission input: `src/terrascout_mission/terrascout_mission/foxglove_mission_input.py`
+- Manual keepout CLI: `src/fleet_common/fleet_common/keepout_zone.py`
+- Operator/test menu and preset waypoints: `src/terrascout_mission_tester/`
+- Unit wiring, topics, and Jetson deployment boundary: `src/fleet_config/fleet_config/classes/terrascout.py`, `src/fleet_config/fleet_config/unit.py`, and `src/fleet_config/fleet_config/targets.py`
+
+In the distributed target, the Jetson supplies YOLO detections on `/terrascout1/oakd/detections_2d`; the depth cloud and robot state are provided by the PC-side simulation. `enemy_reader` subscribes to detections and `/terrascout1/oakd/points` and approximately synchronizes them (queue 10, up to 0.1 s apart). It also uses `/terrascout1/oakd/rgb/camera_info`, timestamped `/terrascout1/fixposition/odometry_enu`, and the datum from `/terrascout1/fixposition/datum`.
+
+For each bounding box, the reader scales RGB pixels to the organized cloud resolution, selects valid forward-facing cloud samples, rejects depth outliers with a median/MAD filter, and requires at least 10 valid points. It transforms the resulting camera/robot-relative position into map ENU using the odometry pose at the sensor timestamp. The point-cloud convention is currently assumed to be Gazebo FLU (+X forward, +Y left, +Z up); verify this assumption against the live cloud before treating coordinates as ground truth. Perception diagnostics print pixel/bounding-box, cloud XYZ, robot ENU, camera offset, and resulting map ENU.
+
+`ObjectTracker` then class-associates and gates detections, updates 3D Kalman tracks, and tracks tentative/confirmed status. A new track starts at observation 1; each matched depth observation increments the count and adds its YOLO confidence (clamped to [0, 1]) to the existence score. Confirmation requires at least 10 matched observations and an existence score of at least 4. Thus, ten high-confidence hits are required at minimum; lower-confidence hits or expected visible misses can delay confirmation. Only confirmed tracks with class ID `Ka-52 Enemy` are used for keepouts. The `enemies` message is another reader output; it is not a prerequisite input to the keepout server because the reader sends the service request directly.
+
+Every 0.5 s, the reader checks confirmed enemy tracks. It converts each track's ENU position to WGS84 latitude/longitude using the current datum, then calls the namespaced `set_keepout_zone` service with label `enemy_track_<id>`, 4 m × 4 m dimensions, and yaw 0°. A zone is sent again if that track moves at least 1 m from its last successfully accepted keepout position. Pending service calls are deduplicated. Accepted/rejected service results and GPS/ENU coordinates are logged. The reader also publishes confirmed enemies on `enemies` and track data on `tracked_objects`.
+
+The keepout server validates and converts the received GPS center back to map ENU using the locked datum, builds the square polygon, stores the named zone in `/run/sage/<namespace>/keepout_zones.json`, and republishes Nav2 collision/costmap data. For Foxglove it publishes the 3D purple volume on `keepout_zone_marker` and a GPS GeoJSON polygon with a purple center point on `keepout_zones_geo`. The server log reports the zone GPS, computed ENU, datum, frame, dimensions, and yaw. Confirm the same center appears in the Foxglove 2D map and that the 3D volume is in the expected map location; successful service acceptance alone does not validate the sensor-frame assumption or perception accuracy.
+
+### Mission request to robot motion
+
+The mission client (CLI, menu, or Foxglove click-input service) submits an `ExecuteMission` plan to `mission_server`. The server first checks readiness and localization, validates route/keepout constraints, then sends the active destination to Nav2 through `NavigateToPose`. Nav2 plans and controls each active leg from its configured maps/costmaps; the server tracks command/mission state and publishes waypoint GeoJSON for Foxglove. Ordered mode preserves the submitted order; unordered mode selects/reorders remaining eligible waypoints using straight-line geographic distance, which is not the same as a Nav2 path-cost calculation. Keepout updates can invalidate destinations and affect the remaining mission; test active-goal cancellation, failure reporting, and continuation in simulation. On takeover or restart the mission can be suspended; resume requires an explicit operator request, healthy localization/readiness, and a fresh path. Consult the current Nav2 and mission parameters before physical operation.
+
+Manual keepout create/list/read/update/delete is also available through `ros2 run fleet_common keepout_zone.py`; examples are in the README. A manual zone and an enemy-generated zone use the same service/server path.
+
+## TerraScout mission tester menu
+
+Start the stack first, then run the tester from the workspace root in a second host terminal:
+
+```sh
+python3 src/terrascout_mission_tester/terrascout_menu.py
+```
+
+The menu reads `src/terrascout_mission_tester/waypoints.json`. Set `TERRASCOUT_NAMESPACE` to select another robot namespace; by default it targets `terrascout1`. If the host has the ROS package, commands run directly; otherwise the menu wraps them through `make exec`. In that fallback, select the same target first (for example `make use TARGET=sim`) or otherwise ensure the selected target matches the running container. Mission choices 1–4 use the preset routes; ordered mode preserves waypoint order, unordered mode asks the mission CLI to reorder. Each send prompts for return-to-start, saved Home, or no explicit return flag. It creates a timestamped results bundle containing the selected route, metadata, and a client log. A message that the client started is not proof that the mission was accepted—check Foxglove and mission state/logs.
+
+Other menu options add/clear waypoints, set or navigate to Home, suspend/resume, inspect mission state, manage keepout zones, and inject/clear the simulation-only localization fault. Keepout creation accepts a test waypoint or GPS coordinates plus dimensions/yaw; list and delete operate on zone labels. Localization fault injection deliberately invalidates simulated localization, requires explicit confirmation, and should never be used on physical hardware. Menu selections that start a mission do not stop the menu from another process; inspect the saved log/result bundle and mission state to establish outcome.
 
 ---
 
@@ -14,7 +225,7 @@ File:
 src/fleet_config/fleet_config/model.py
 ```
 
-Set a different ROS domain ID for each computer to keep ROS 2 communication isolated.
+Use the same ROS domain ID for nodes that must communicate across the PC–Jetson deployment. Use a different ID to isolate an unrelated fleet/development setup; do not change just one machine in a connected deployment.
 
 ### dator10
 
@@ -25,10 +236,10 @@ def domain_id(self) -> int:
 ```
 Example:
 
-| Computer | ROS Domain ID |
+| Deployment | ROS Domain ID |
 |---|---:|
-| dator10 | `133` |
-| dator11 | `30` |
+| Current SAGE configuration (PC; Jetson must match) | `133` |
+| Independent ROS graph (example only) | choose a different ID |
 
 ---
 
@@ -71,10 +282,7 @@ def gz_partition(self) -> str:
 ```
 The resulting partitions for SAGE instance 1 are:
 
-| Computer | Gazebo Partition |
-|---|---|
-| dator10 | `dator10_sage_1` |
-| dator11 | `dator11_sage_1` |
+Use distinct partition names for independent Gazebo simulations on the same network. The current checked-in partition is `dator10_sage_<instance>`; update the machine-specific prefix when using another host.
 
 ---
 
@@ -158,16 +366,14 @@ These topics should also use the appropriate QoS configuration where required.
 
 Recording is disabled for the default `sim` target. Use `sim-record` for the standard recording simulation, or `sim-elevation-pc` for the elevation-PC Zenoh deployment, which currently also enables recording in `src/fleet_config/fleet_config/targets.py`.
 
-From the workspace root, select the elevation-PC deployment, build the selected configuration (including its recorder process), then start it:
+From the workspace root, build and start the elevation-PC deployment:
 
 ```sh
-make use TARGET=sim-elevation-pc
-make build
-make up
+make build TARGET=sim-elevation-pc
 make up TARGET=sim-elevation-pc
 ```
 
-For the standard local recording simulation, use `make use TARGET=sim-record` instead. Confirm the recorder reports ready in startup output. The elevation-PC uplink address and interface are configured in `src/fleet_config/fleet_config/targets.py`; update them if the computer's network interface/address changes.
+For the standard local recording simulation, run `make build TARGET=sim-record` and `make up TARGET=sim-record` instead. Confirm whether recording is enabled for the selected target in `src/fleet_config/fleet_config/targets.py` and that the recorder reports ready in startup output. The elevation-PC uplink address and interface are configured in that file; update them if the computer's network interface/address changes.
 
 Run the mission or route you want to evaluate while the simulation is running. To finish the recording, press **Ctrl+C** in the terminal running `make up` and wait for the stack to stop and the prompt to return. Alternatively, run `make down` from a second terminal. Do not kill the recorder/container forcefully; it needs to shut down normally to write the bag metadata.
 
@@ -175,9 +381,20 @@ Stop the stack normally with Ctrl+C in `make up` or `make down` from another ter
 
 ```sh
 source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-python3 src/terrascout_navigation/terrascout_navigation/scripts/process_mission_recording.py --show-trajectory
+source install/host_interfaces/setup.bash
+python3 src/terrascout_navigation/terrascout_navigation/scripts/process_mission_recording.py --headless
 ```
+
+Create the host interface overlay once after cloning the workspace (or after changing `fleet_interfaces` definitions):
+
+```sh
+source /opt/ros/jazzy/setup.bash
+colcon build --base-paths src/fleet_interfaces \
+    --build-base build/host_interfaces \
+    --install-base install/host_interfaces
+```
+
+For host-side bag processing, do not source the workspace's top-level `install/setup.bash`: it may reference container-only package paths and omit importable generated message modules. The separate `install/host_interfaces` overlay supplies `MissionState` and `TrackedObjectArray` to the processor and its child scripts. The normal processing command above only needs to source that already-built overlay. The processor checks for the message types before doing any work and prints a setup hint if the overlay is missing or stale.
 
 Without `--bag`, the processor selects the completed bag with the newest metadata-file modification time across the active recording directory and archived runs. To choose a specific recording, pass `--bag /absolute/path/to/rosbag_directory`. A mission report requires a positive mission ID in the recorded state topic; if none was recorded, the processor still keeps the FAST-LIO comparison and notes that the mission report was skipped.
 

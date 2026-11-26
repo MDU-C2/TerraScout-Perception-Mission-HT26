@@ -24,7 +24,7 @@
       PolygonSlow30:
         action_type: slowdown
         enabled: true
-        points: '[[1.50, 0.65], [1.50, -0.65], [-0.90, -0.65], [-0.90, 0.65]]'
+        points: '[[1.50, 0.785], [1.50, -0.785], [-0.90, -0.785], [-0.90, 0.785]]'
         polygon_pub_topic: polygon_slow30
         slowdown_ratio: 0.7
         min_points: 10
@@ -35,7 +35,7 @@
       PolygonSlow60:
         action_type: slowdown
         enabled: true
-        points: '[[0.85, 0.45], [0.85, -0.45], [-0.60, -0.45], [-0.60, 0.45]]'
+        points: '[[0.85, 0.585], [0.85, -0.585], [-0.60, -0.585], [-0.60, 0.585]]'
         polygon_pub_topic: polygon_slow60
         slowdown_ratio: 0.4
         min_points: 10
@@ -46,7 +46,7 @@
       PolygonSlow80:
         action_type: slowdown
         enabled: true
-        points: '[[0.51, 0.39], [0.51, -0.39], [-0.51, -0.39], [-0.51, 0.39]]'
+        points: '[[0.51, 0.525], [0.51, -0.525], [-0.51, -0.525], [-0.51, 0.525]]'
         polygon_pub_topic: polygon_slow80
         slowdown_ratio: 0.2
         min_points: 10
@@ -165,7 +165,7 @@
         # Diagnostic: publish complete grids so visualization consumers do not
         # depend on correctly applying incremental costmap updates.
         always_send_full_costmap: false
-        footprint: '[[0.465, 0.35], [0.465, -0.35], [-0.465, -0.35], [-0.465, 0.35]]'
+        footprint: '[[0.465, 0.485], [0.465, -0.485], [-0.465, -0.485], [-0.465, 0.485]]'
         footprint_padding: 0.01
         global_frame: map
         height: 110
@@ -272,7 +272,7 @@
     local_costmap:
       ros__parameters:
         always_send_full_costmap: false
-        footprint: '[[0.465, 0.35], [0.465, -0.35], [-0.465, -0.35], [-0.465, 0.35]]'
+        footprint: '[[0.465, 0.485], [0.465, -0.485], [-0.465, -0.485], [-0.465, 0.485]]'
         footprint_padding: 0.01
         global_frame: odom
         robot_base_frame: base_link

@@ -11,12 +11,15 @@ class ObjectTrack:
     def __init__(self, track_id, observation, timestamp, tracker):
         self.id = track_id
         self.obj_class = observation['class_id']
-        self.observations = 5
+        # The depth-backed observation that creates the track is hit one.
+        self.observations = 1
         self.last_seen = float(timestamp)
         self.last_predicted = float(timestamp)
         self.min_observations = tracker.min_observations
         self.process_std_per_sqrt_second = tracker.process_std_per_sqrt_second
-        self.existence_score = 1.0  #Heuristic, will add +1 and -1
+        self.existence_score = float(np.clip(
+            observation.get('yolo_confidence', 1.0), 0.0, 1.0
+        ))
         self.confirmation_score = tracker.confirmation_score
         self.confirmed = False
         self.expected_misses = 0
@@ -65,7 +68,10 @@ class ObjectTrack:
         self.last_seen = float(timestamp)
         self.last_visibility_check = float(timestamp)
         self.expected_misses = 0
-        self.existence_score = min(12.0, self.existence_score + 1.0)
+        confidence = float(np.clip(
+            observation.get('yolo_confidence', 1.0), 0.0, 1.0
+        ))
+        self.existence_score = min(12.0, self.existence_score + confidence)
 
         #TODO, image == None is dealt with in self.save image, but then we get no image since it is only called once per track
         if (self.observations >= self.min_observations and self.existence_score >= self.confirmation_score):
@@ -106,7 +112,7 @@ class ObjectTracker:
     #TODO, motivate/verify
     def __init__(
         self,
-        min_observations=5,
+        min_observations=10,
         initial_std=0.5,
         measurement_std=0.20,
         process_std_per_sqrt_second=0.01,
@@ -121,18 +127,18 @@ class ObjectTracker:
     ):
         self.tracks = []
         self.next_id = 1
-        self.min_observations = int(min_observations)
-        self.initial_std = float(initial_std)
-        self.measurement_std = float(measurement_std)
-        self.process_std_per_sqrt_second = float(process_std_per_sqrt_second)
-        self.chi2_gate_3d = float(chi2_gate_3d)
-        self.max_physical_distance = float(max_physical_distance)
-        self.confirmation_score = float(confirmation_score)
-        self.max_expected_misses = int(max_expected_misses)
-        self.min_miss_interval = float(min_miss_interval)
-        self.min_visible_distance = float(min_visible_distance)
-        self.max_visible_distance = float(max_visible_distance)
-        self.frame_margin = float(frame_margin)
+        self.min_observations = 5
+        self.initial_std = 0.5
+        self.measurement_std = 0.20
+        self.process_std_per_sqrt_second = 0.01
+        self.chi2_gate_3d = 7.815   # 95% chi-square, 3 degrees of freedom
+        self.max_physical_distance = 2.0
+        self.confirmation_score = 4.0
+        self.max_expected_misses = 4
+        self.min_miss_interval = 1.0
+        self.min_visible_distance = 0.8
+        self.max_visible_distance = 6.0
+        self.frame_margin = 0.12
         self.new_track_cost = 7.815
         self.missed_track_cost = 7.815
 

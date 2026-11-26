@@ -61,6 +61,7 @@ NAVIGATION_PACKAGE = "terrascout_navigation"
 HARDWARE_PACKAGE = "terrascout_hardware"
 MISSION_PACKAGE = "terrascout_mission"
 SIMULATION_PACKAGE = "fleet_simulation"
+OBJECT_LOCALIZATION_PACKAGE = "object_localization"
 FAST_LIO = "fast_lio"
 
 PERCEPTION_PACKAGE = "s_perception_2d"
@@ -956,24 +957,21 @@ def perception_processes(unit: UnitContext, after: list[str]) -> list[Process]:
             )
         )
 
-    # Enemy reader always runs on the PC in simulation
-    if unit.mode == SIMULATION:
+    # When YOLO is offloaded, do not wait for a local YOLO process
+    object_localization_after = after if jetson_yolo else [YOLO_DETECTOR]
 
-        # When YOLO is offloaded, do not wait for a local YOLO process
-        enemy_reader_after = after if jetson_yolo else [YOLO_DETECTOR]
-
-        processes.append(
-            node(
-                "enemy_reader",
-                package=SIMULATION_PACKAGE,
-                executable="enemy_reader.py",
-                node_name="enemy_reader",
-                namespace=unit.namespace,
-                after=enemy_reader_after,
-                ready=NodeProbe(f"/{unit.namespace}/enemy_reader"),
-                output="log",
-            )
+    processes.append(
+        node(
+            "object_localization",
+            package=OBJECT_LOCALIZATION_PACKAGE,
+            executable="object_localization_node.py",
+            node_name="object_localization",
+            namespace=unit.namespace,
+            after=object_localization_after,
+            ready=NodeProbe(f"/{unit.namespace}/object_localization"),
+            output="log",
         )
+    )
 
     return processes
 

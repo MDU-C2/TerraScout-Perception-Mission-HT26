@@ -309,6 +309,9 @@
         },
         "/<robot_namespace>/keepout_zones_geo": {
           "visible": true
+        },
+        "/<robot_namespace>/friendly_detections_geo": {
+          "visible": true
         }
       },
       "zoomLevel": 17

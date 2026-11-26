@@ -29,6 +29,7 @@ MISSION_ROUTES = {
         'WP1', 'WP12', 'WP5', 'WP18', 'WP9', 'WP3', 'WP16', 'WP7', 'WP14', 'WP2',
         'WP20', 'WP11', 'WP4', 'WP17', 'WP8', 'WP19', 'WP6', 'WP13', 'WP10', 'WP15',
     ]),
+    '5': ('Västerås mission', ['Vasteras WP1', 'Vasteras WP2']),
 }
 
 

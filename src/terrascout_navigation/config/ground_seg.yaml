@@ -3,7 +3,7 @@
     use_imu_orientation: true
     # Use the ground-level robot origin; base_link is raised 0.33 m above it.
     robot_frame: base_footprint
-    lidar_to_ground: -0.80
+    lidar_to_ground: -0.90
     transform_tolerance: 0.3
     cellSizeX: 1.0
     cellSizeY: 1.0

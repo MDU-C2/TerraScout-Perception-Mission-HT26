@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 try:
     import matplotlib
+    from matplotlib.lines import Line2D
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -37,6 +38,7 @@ def read_odometry_bag(bag_path: Path, topics: list[str]):
         rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=topics))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     missing = [topic for topic in topics if topic not in type_map]
     if missing:
@@ -93,6 +95,7 @@ def read_plan_bag(bag_path: Path, topic: str, start_time: float, end_time: float
         rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     if topic not in type_map:
         print(f"WARNING: planned path topic {topic} is not in the bag")
@@ -149,6 +152,7 @@ def read_waypoint_snapshot(bag_path: Path, topic: str, end_time: float):
         rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     if topic not in type_map:
         print(f"WARNING: waypoint topic {topic} is not in the bag")
@@ -222,6 +226,7 @@ def read_datum(bag_path: Path, topic: str):
         rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     if topic not in type_map:
         print(f"WARNING: datum topic {topic} is not in the bag; waypoint markers omitted")
@@ -244,6 +249,7 @@ def read_map_odom_transform(bag_path: Path, namespace: str):
         rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=list(tf_topics)))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     available = [topic for topic in tf_topics if topic in type_map]
     if not available:
@@ -294,6 +300,7 @@ def read_keepout_zones(bag_path: Path, topic: str, end_time: float, map_to_odom=
         rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
         rosbag2_py.ConverterOptions("", ""),
     )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
     type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
     if topic not in type_map:
         print(f"WARNING: keepout marker topic {topic} is not in the bag")
@@ -339,6 +346,73 @@ def read_keepout_zones(bag_path: Path, topic: str, end_time: float, map_to_odom=
         zones.append({"label": marker.text or f"Keepout {marker.id}", "points": polygon})
     print(f"{topic}: plotting {len(zones)} recorded keepout zone(s)")
     return zones
+
+
+def read_detection_tracks(
+    bag_path: Path, topic: str, start_time: float, end_time: float, map_to_odom=None
+):
+    """Read localized object tracks from the bag and convert map XY to odom XY."""
+    reader = rosbag2_py.SequentialReader()
+    reader.open(
+        rosbag2_py.StorageOptions(uri=str(bag_path), storage_id="mcap"),
+        rosbag2_py.ConverterOptions("", ""),
+    )
+    reader.set_filter(rosbag2_py.StorageFilter(topics=[topic]))
+    type_map = {entry.name: entry.type for entry in reader.get_all_topics_and_types()}
+    if topic not in type_map:
+        print(f"WARNING: tracked-object topic {topic} is not in the bag")
+        return []
+    expected_type = "fleet_interfaces/msg/TrackedObjectArray"
+    if type_map[topic] != expected_type:
+        print(f"WARNING: {topic} has type {type_map[topic]}, expected {expected_type}")
+        return []
+    message_type = get_message(type_map[topic])
+    latest_by_id = {}
+    while reader.has_next():
+        current_topic, serialized, received_ns = reader.read_next()
+        if current_topic != topic:
+            continue
+        try:
+            message = deserialize_message(serialized, message_type)
+        except Exception as error:
+            print(
+                f"WARNING: cannot decode {topic} with the currently installed "
+                f"TrackedObjectArray definition ({error}); detection overlay omitted. "
+                "Re-record after rebuilding fleet_interfaces to plot localized detections."
+            )
+            return []
+        stamp = message.header.stamp
+        stamp_ns = int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
+        timestamp = (stamp_ns or received_ns) * 1e-9
+        if not start_time <= timestamp <= end_time:
+            continue
+        frame = message.header.frame_id.lstrip("/")
+        if frame not in ("map", "terrascout1/map"):
+            print(f"WARNING: tracked-object frame {frame!r} unsupported; detection overlay omitted")
+            return []
+        for obj in message.objects:
+            if not all(hasattr(obj, name) for name in ("id", "class_id", "x", "y", "confirmed")):
+                print("WARNING: tracked-object messages lack localized class/position fields; rebuild and re-record")
+                return []
+            if not np.isfinite([obj.x, obj.y]).all():
+                continue
+            latest_by_id[int(obj.id)] = (timestamp, {
+                "id": int(obj.id),
+                "class_id": str(obj.class_id),
+                "x": float(obj.x),
+                "y": float(obj.y),
+                "confirmed": bool(obj.confirmed),
+            })
+    points = [sample for _, sample in latest_by_id.values()]
+    if points and map_to_odom is None:
+        print("WARNING: no recorded map-to-odom transform; detection overlay omitted")
+        return []
+    if points:
+        xy = map_to_odom(np.asarray([[point["x"], point["y"]] for point in points]))
+        for point, (x, y) in zip(points, xy):
+            point["x"], point["y"] = float(x), float(y)
+    print(f"{topic}: plotting {len(points)} latest localized object positions (deduplicated by track ID)")
+    return points
 
 
 def arrays(rows):
@@ -401,7 +475,7 @@ def save_plot(path: Path, seconds, series, ylabel: str, title: str):
     plt.xlabel("Time since first matched sample [s]")
     plt.ylabel(ylabel)
     plt.title(title)
-    plt.legend()
+    plt.legend(loc="upper right")
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(path, dpi=160)
@@ -410,12 +484,12 @@ def save_plot(path: Path, seconds, series, ylabel: str, title: str):
 
 def save_trajectory_plot(
     path: Path, gt_position, lio_position, planned_paths=(), waypoints=(),
-    keepout_zones=(), show=False
+    keepout_zones=(), detection_tracks=(), show=False
 ):
     """Save an XY overlay and optionally display it interactively."""
     if plt is None:
         return
-    plt.figure(figsize=(8, 8))
+    fig, axis = plt.subplots(figsize=(13, 8))
     plt.plot(gt_position[:, 0], gt_position[:, 1], label="Ground truth", linewidth=2)
     plt.plot(
         lio_position[:, 0], lio_position[:, 1],
@@ -423,15 +497,36 @@ def save_trajectory_plot(
     )
     for zone in keepout_zones:
         polygon = np.vstack((zone["points"], zone["points"][0]))
-        plt.fill(polygon[:, 0], polygon[:, 1], color="#ef4444", alpha=0.2, zorder=1)
-        plt.plot(polygon[:, 0], polygon[:, 1], color="#dc2626", linewidth=1.5, zorder=2)
-        center = np.mean(zone["points"], axis=0)
-        plt.annotate(zone["label"], center, color="#991b1b", fontsize=8, ha="center")
+        plt.fill(polygon[:, 0], polygon[:, 1], color="#8b2be2", alpha=0.18, zorder=4)
+        plt.plot(polygon[:, 0], polygon[:, 1], color="#8b2be2", linewidth=2.5, zorder=5.5)
     if keepout_zones:
-        plt.plot([], [], color="#dc2626", linewidth=1.5, label="Keepout zone")
+        plt.plot([], [], color="#8b2be2", linewidth=1.5, label="Keepout zone")
+    detection_styles = {
+        "apache friendly": ("#00ff00", "Friendly detection"),
+        "ka-52 enemy": ("#ff0000", "Enemy detection"),
+    }
+    present_detection_labels = set()
+    for detection in detection_tracks:
+        if not detection["confirmed"]:
+            continue
+        class_key = detection["class_id"].strip().lower()
+        color, class_label = detection_styles.get(class_key, ("#9333ea", "Other detection"))
+        confirmed = True
+        marker_options = {
+            "color": color,
+            "marker": "o" if confirmed else "x",
+            "s": 54 if confirmed else 38,
+            "alpha": 1.0 if confirmed else 0.65,
+            "linewidths": 0.7 if confirmed else 1.5,
+            "zorder": 6 if confirmed else 5.8,
+        }
+        if confirmed:
+            marker_options["edgecolors"] = "#111827"
+        plt.scatter(detection["x"], detection["y"], **marker_options)
+        present_detection_labels.add((class_label, color, confirmed))
     status_colors = {
-        "pending": "#3b82f6", "completed": "#22c55e", "failed": "#ef4444",
-        "active": "#f97316", "skipped": "#9ca3af",
+        "pending": "#17becf", "completed": "#2563eb", "failed": "#8c564b",
+        "active": "#e377c2", "skipped": "#7f7f7f",
     }
     # Color each path by the waypoint leg it approaches. Repeated replans for
     # that same leg share its status color; only one legend entry per status.
@@ -467,11 +562,25 @@ def save_trajectory_plot(
     plt.xlabel("East / X [m]")
     plt.ylabel("North / Y [m]")
     plt.title("FAST-LIO2 trajectory vs ground truth")
-    plt.axis("equal")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(path, dpi=160)
+    axis = plt.gca()
+    axis.set_aspect("equal", adjustable="datalim")
+    axis.margins(0.02)
+    axis.grid(True)
+    handles, labels = axis.get_legend_handles_labels()
+    for label, color, confirmed in sorted(present_detection_labels):
+        handles.append(Line2D(
+            [], [], marker="o" if confirmed else "x", linestyle="none", markersize=7,
+            markerfacecolor=color if confirmed else "none",
+            markeredgecolor="#111827" if confirmed else color,
+            label=f"{label} — {'confirmed' if confirmed else 'tentative'}",
+        ))
+        labels.append(f"{label} — {'confirmed' if confirmed else 'tentative'}")
+    axis.legend(
+        handles, labels, loc="upper left", bbox_to_anchor=(1.015, 1.0),
+        borderaxespad=0, fontsize=9, labelspacing=0.6, handlelength=1.8,
+    )
+    fig.tight_layout(rect=(0, 0, 0.86, 1))
+    plt.savefig(path, dpi=160, bbox_inches="tight")
     if show:
         backend = matplotlib.get_backend().lower()
         if "agg" in backend:
@@ -505,6 +614,7 @@ def main():
     parser.add_argument("--waypoints-topic", default="/terrascout1/waypoints_geo")
     parser.add_argument("--datum-topic", default="/terrascout1/fixposition/datum")
     parser.add_argument("--keepout-marker-topic", default="/terrascout1/keepout_zone_marker")
+    parser.add_argument("--tracked-objects-topic", default="/terrascout1/tracked_objects")
     parser.add_argument(
         "--plan-to-odom-x", type=float,
         help="known map-to-odom translation X [m]; omit unless calibrated",
@@ -612,6 +722,9 @@ def main():
     keepout_zones = read_keepout_zones(
         args.bag, args.keepout_marker_topic, float(t[-1]), map_to_odom
     )
+    detection_tracks = read_detection_tracks(
+        args.bag, args.tracked_objects_topic, float(t[0]), float(t[-1]), map_to_odom
+    )
     waypoint_points = []
     if waypoint_geo:
         datum = read_datum(args.bag, args.datum_topic)
@@ -713,6 +826,7 @@ def main():
     save_trajectory_plot(
         args.out_dir / f"{output_prefix}trajectory_comparison.png", gt_imu_p, lio_p_aligned,
         planned_paths=planned_paths, waypoints=waypoint_points, keepout_zones=keepout_zones,
+        detection_tracks=detection_tracks,
         show=args.show_trajectory,
     )
     if recording_start is None:
